@@ -41,6 +41,11 @@
   select,input{font:inherit;font-size:17px;color:var(--ink);background:var(--surface);
     border:1.5px solid var(--line);border-radius:12px;padding:12px 12px;width:100%}
   select:focus,input:focus,button:focus-visible{outline:3px solid var(--cafe);outline-offset:1px}
+  .seg{display:flex;gap:6px;background:var(--surface2);border:1.5px solid var(--line);border-radius:12px;padding:4px}
+  .seg button{flex:1;border:0;background:none;font:inherit;font-weight:800;font-size:15px;padding:12px 0;
+    border-radius:9px;color:var(--ink2);cursor:pointer}
+  .seg button.on{background:var(--cafe);color:#fff}
+  .seg button:active{transform:scale(.97)}
   .counters{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .counter{border-radius:18px;padding:16px 14px 14px;color:#fff;display:flex;flex-direction:column;gap:10px;
     box-shadow:0 4px 14px rgba(0,0,0,.12)}
@@ -135,7 +140,9 @@ try{db=JSON.parse(localStorage.getItem(LS))||seed();}catch(e){db=seed();}
 if(!db.talhoes)db.talhoes=[];if(!db.registros)db.registros=[];
 const save=()=>{try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){}};
 
-let tab='contar', talhaoAtivo=(db.talhoes[0]||{}).id||'';
+let tab='contar', talhaoAtivo=(db.talhoes[0]||{}).id||'', passadaAtiva=1;
+const PASS=r=>r.passada||1;
+const passLbl=p=>p===2?'2ª passada':'1ª passada';
 
 function flash(t){const f=document.getElementById('flash');f.textContent=t;f.classList.add('on');
   clearTimeout(f._t);f._t=setTimeout(()=>f.classList.remove('on'),1400);}
@@ -147,10 +154,10 @@ const talNome=id=>(db.talhoes.find(t=>t.id===id)||{nome:'—'}).nome;
 /* ---------- CONTAR ---------- */
 function vCounter(origem,cls,emoji,nome){
   const hoje=today();
-  const tot=somaReg(db.registros.filter(r=>r.origem===origem&&r.talhaoId===talhaoAtivo&&r.data===hoje));
+  const tot=somaReg(db.registros.filter(r=>r.origem===origem&&r.talhaoId===talhaoAtivo&&r.data===hoje&&PASS(r)===passadaAtiva));
   return `<div class="counter ${cls}">
     <div class="top"><span class="nome">${emoji} ${nome}</span></div>
-    <div><div class="tot">${N(tot)}</div><div class="un">carretas hoje</div></div>
+    <div><div class="tot">${N(tot)}</div><div class="un">carretas · ${passLbl(passadaAtiva).replace(' passada','ª')}</div></div>
     <div class="btns tri">
       <button class="badd bsub" data-add="${origem}" data-q="-1">−1</button>
       <button class="badd" data-add="${origem}" data-q="0.5">+½</button>
@@ -168,16 +175,21 @@ function pgContar(){
   return `
   <div class="field"><label>Talhão sendo colhido</label>
     <select id="selTal">${db.talhoes.map(t=>`<option value="${t.id}" ${t.id===talhaoAtivo?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
+  <div class="field"><label>Passada</label>
+    <div class="seg" id="segPass">
+      <button data-pass="1" class="${passadaAtiva===1?'on':''}">1ª passada</button>
+      <button data-pass="2" class="${passadaAtiva===2?'on':''}">2ª passada</button>
+    </div></div>
   <div class="counters">
     ${vCounter('arvore','arv','🌳','Árvore')}
     ${vCounter('chao','cha','🍂','Chão')}
   </div>
-  <div class="daytot"><span class="k">Total do talhão hoje (${dBR(hoje)})</span><span class="v">${N(totDia)}</span></div>
+  <div class="daytot"><span class="k">Total do talhão hoje (${dBR(hoje)})<br><span style="font-size:11px">1ª ${N(somaReg(db.registros.filter(r=>r.data===hoje&&r.talhaoId===talhaoAtivo&&PASS(r)===1)))} · 2ª ${N(somaReg(db.registros.filter(r=>r.data===hoje&&r.talhaoId===talhaoAtivo&&PASS(r)===2)))}</span></span><span class="v">${N(totDia)}</span></div>
   <h2>Lançamentos de hoje</h2>
   ${(()=>{const rs=db.registros.filter(r=>r.data===hoje).sort((a,b)=>b.ts-a.ts).slice(0,20);
     if(!rs.length)return '<div class="empty">Nenhuma carreta lançada hoje ainda.</div>';
     return `<div class="card" style="padding:4px 12px">${rs.map(r=>`<div class="totrow" style="grid-template-columns:1fr auto auto">
-      <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span></span>
+      <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span> <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª</span></span>
       <b>${r.carretas>0?'+':''}${N(r.carretas)}</b>
       <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>`;})()}`;
 }
@@ -205,6 +217,14 @@ function pgRelatorio(){
     <div class="counter cha"><span class="nome">🍂 Chão</span><div><div class="tot">${N(totCha)}</div><div class="un">carretas no período</div></div></div>
   </div>
   <div class="daytot"><span class="k">Total geral</span><span class="v">${N(totArv+totCha)}</span></div>
+  <h2>Por passada</h2>
+  <div class="card" style="padding:4px 12px">
+    <div class="totrow head"><span>Passada</span><span>🌳 Árv.</span><span>🍂 Chão</span><span>Total</span></div>
+    ${[1,2].map(pp=>{const rp=rs.filter(r=>PASS(r)===pp);
+      const a=rp.filter(r=>r.origem==='arvore').reduce((s,r)=>s+r.carretas,0);
+      const c=rp.filter(r=>r.origem==='chao').reduce((s,r)=>s+r.carretas,0);
+      return `<div class="totrow"><span>${pp}ª passada</span><b>${N(a)}</b><b>${N(c)}</b><b>${N(a+c)}</b></div>`;}).join('')}
+  </div>
   <h2>Por talhão</h2>
   <div class="card" style="padding:4px 12px">
     <div class="totrow head"><span>Talhão</span><span>🌳 Árv.</span><span>🍂 Chão</span><span>Total</span></div>
@@ -233,6 +253,9 @@ function resumoTexto(){
     const c=rs.filter(r=>r.talhaoId===tl.id&&r.origem==='chao').reduce((s,r)=>s+r.carretas,0);
     if(a||c)t+=`${tl.nome}: 🌳 ${N(a)} · 🍂 ${N(c)} = ${N(a+c)}\n`;
   });
+  const p1=rs.filter(r=>PASS(r)===1).reduce((s,r)=>s+r.carretas,0);
+  const p2=rs.filter(r=>PASS(r)===2).reduce((s,r)=>s+r.carretas,0);
+  t+=`\nPor passada: 1ª ${N(p1)} · 2ª ${N(p2)}`;
   t+=`\nTOTAL: 🌳 ${N(totArv)} + 🍂 ${N(totCha)} = ${N(totArv+totCha)} carretas`;
   return t;
 }
@@ -242,9 +265,9 @@ function enviarWhats(){
   else{window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank');}
 }
 function exportCSV(){
-  const linhas=[['Data','Talhao','Origem','Carretas','Operador']];
+  const linhas=[['Data','Talhao','Origem','Passada','Carretas','Operador']];
   db.registros.slice().sort((a,b)=>a.data<b.data?-1:1).forEach(r=>
-    linhas.push([r.data,talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',String(r.carretas).replace('.',','),r.operador||'']));
+    linhas.push([r.data,talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',PASS(r)+'a',String(r.carretas).replace('.',','),r.operador||'']));
   const csv='﻿'+linhas.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
   baixar(new Blob([csv],{type:'text/csv'}),'gefaz-conta-'+today()+'.csv');
 }
@@ -376,16 +399,18 @@ document.getElementById('main').addEventListener('click',e=>{
   if(add){
     const q=parseFloat(add.dataset.q);
     const hoje=today();
-    if(q<0){ /* -1: remove do total de hoje desse talhão/origem, sem ir negativo */
-      const atual=somaReg(db.registros.filter(r=>r.origem===add.dataset.add&&r.talhaoId===talhaoAtivo&&r.data===hoje));
+    if(q<0){ /* -1: remove do total de hoje desse talhão/origem/passada, sem ir negativo */
+      const atual=somaReg(db.registros.filter(r=>r.origem===add.dataset.add&&r.talhaoId===talhaoAtivo&&r.data===hoje&&PASS(r)===passadaAtiva));
       if(atual<=0){flash('Nada para remover');return;}
     }
     db.registros.push({id:uid(),data:hoje,talhaoId:talhaoAtivo,origem:add.dataset.add,
-      carretas:q,operador,ts:Date.now()});
+      carretas:q,passada:passadaAtiva,operador,ts:Date.now()});
     save();
     if(navigator.vibrate)navigator.vibrate(q<0?20:35);
     render();return;
   }
+  const pass=e.target.closest('[data-pass]');
+  if(pass){passadaAtiva=+pass.dataset.pass;render();return;}
   const del=e.target.closest('[data-del]');
   if(del){db.registros=db.registros.filter(r=>r.id!==del.dataset.del);save();render();return;}
   const delt=e.target.closest('[data-delt]');
