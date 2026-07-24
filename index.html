@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#5a2f16">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Gefaz Conta — Carretas de Café</title>
+<style>
+  :root{
+    --bg:#f5efe6; --surface:#fffdf9; --surface2:#efe6d8; --ink:#231a12; --ink2:#6b5a48;
+    --muted:#9c8a74; --line:#e2d6c4; --border:rgba(35,26,18,.12);
+    --arvore:#2f7d4f; --arvore-d:#276a43; --chao:#b5622c; --chao-d:#9c5122;
+    --cafe:#5a2f16; --accent:#5a2f16; --good:#2f7d4f; --warn:#b5622c; --crit:#c0392b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#171310; --surface:#211b16; --surface2:#2c241d; --ink:#f6efe6; --ink2:#c3b6a4;
+      --line:#3a3027; --border:rgba(246,239,230,.12);
+      --arvore:#43a76a; --arvore-d:#358a56; --chao:#d1793f; --chao-d:#b5622c; --cafe:#c98a5f;
+    }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);
+    font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
+    display:flex;flex-direction:column;min-height:100vh;overscroll-behavior:none}
+  header{background:var(--cafe);color:#fff;padding:12px 16px;display:flex;align-items:center;
+    justify-content:space-between;gap:10px;position:sticky;top:0;z-index:5}
+  header .logo{font-weight:800;letter-spacing:-.01em;font-size:18px;display:flex;align-items:center;gap:8px}
+  header .logo small{display:block;font-size:11px;font-weight:600;opacity:.8;letter-spacing:.02em}
+  header .op{font-size:13px;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:99px;
+    font-weight:600;max-width:44vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+  main{flex:1;padding:14px;max-width:640px;width:100%;margin:0 auto;padding-bottom:82px}
+  h2{font-size:15px;font-weight:700;margin:18px 2px 8px;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+  .field label{font-size:12.5px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em}
+  select,input{font:inherit;font-size:17px;color:var(--ink);background:var(--surface);
+    border:1.5px solid var(--line);border-radius:12px;padding:12px 12px;width:100%}
+  select:focus,input:focus,button:focus-visible{outline:3px solid var(--cafe);outline-offset:1px}
+  .counters{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .counter{border-radius:18px;padding:16px 14px 14px;color:#fff;display:flex;flex-direction:column;gap:10px;
+    box-shadow:0 4px 14px rgba(0,0,0,.12)}
+  .counter.arv{background:linear-gradient(160deg,var(--arvore),var(--arvore-d))}
+  .counter.cha{background:linear-gradient(160deg,var(--chao),var(--chao-d))}
+  .counter .top{display:flex;align-items:center;justify-content:space-between}
+  .counter .nome{font-weight:800;font-size:16px;display:flex;align-items:center;gap:6px}
+  .counter .tot{font-size:44px;font-weight:800;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .counter .un{font-size:13px;opacity:.85;font-weight:600;margin-top:-2px}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btns.tri{grid-template-columns:1fr 1fr 1fr}
+  .badd{border:0;border-radius:12px;font:inherit;font-weight:800;font-size:20px;padding:16px 0;cursor:pointer;
+    background:rgba(255,255,255,.22);color:#fff;user-select:none}
+  .badd:active{transform:scale(.95);background:rgba(255,255,255,.34)}
+  .bsub{background:rgba(0,0,0,.16);font-size:22px}
+  .daytot{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;
+    margin-top:14px;display:flex;align-items:baseline;justify-content:space-between}
+  .daytot .v{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .daytot .k{font-size:13px;color:var(--ink2);font-weight:600}
+  .card{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+  .btn{font:inherit;font-size:16px;font-weight:700;border:0;border-radius:12px;padding:14px 16px;cursor:pointer;
+    background:var(--cafe);color:#fff;width:100%}
+  .btn.ghost{background:var(--surface2);color:var(--ink);border:1.5px solid var(--line)}
+  .btn.sm{font-size:14px;padding:10px 12px;width:auto}
+  .btnrow{display:flex;flex-direction:column;gap:8px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink2);text-align:left;
+    padding:8px 8px;border-bottom:1.5px solid var(--line)}
+  td{padding:9px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  td.num,th.num{text-align:right}
+  tr:last-child td{border-bottom:0}
+  .pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px}
+  .pill.arv{background:color-mix(in srgb,var(--arvore) 18%,transparent);color:var(--arvore)}
+  .pill.cha{background:color-mix(in srgb,var(--chao) 20%,transparent);color:var(--chao)}
+  .del{border:0;background:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px 8px}
+  .del:active{color:var(--crit)}
+  .empty{color:var(--ink2);text-align:center;padding:26px 10px;font-size:14px}
+  .msg{font-size:13.5px;color:var(--ink2);background:var(--surface2);border-radius:10px;padding:10px 12px;margin-top:8px}
+  .totrow{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;
+    padding:11px 4px;border-bottom:1px solid var(--line);font-size:14.5px}
+  .totrow.head{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink2);font-weight:700}
+  .totrow b{font-variant-numeric:tabular-nums}
+  nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1.5px solid var(--line);
+    display:flex;z-index:6;padding-bottom:env(safe-area-inset-bottom,0)}
+  nav button{flex:1;border:0;background:none;color:var(--ink2);font:inherit;font-size:11px;font-weight:600;
+    padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+  nav button .ic{font-size:21px;line-height:1}
+  nav button.on{color:var(--cafe)}
+  @media (prefers-color-scheme: dark){nav button.on{color:var(--cafe)}}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:20}
+  .modal.on{display:flex}
+  .sheet{background:var(--surface);width:100%;border-radius:18px 18px 0 0;padding:18px 16px 26px;max-width:640px;margin:0 auto}
+  .sheet h3{margin:0 0 12px;font-size:17px}
+  .row{display:flex;gap:8px}
+  .hide{display:none !important}
+  .flash{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:var(--ink);color:var(--bg);
+    padding:8px 16px;border-radius:99px;font-size:14px;font-weight:600;opacity:0;transition:opacity .2s;z-index:30;pointer-events:none}
+  .flash.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">☕ Gefaz Conta<small>Carretas de café</small></div>
+  <div class="op" id="opChip" title="Trocar operador"></div>
+</header>
+<main id="main"></main>
+<nav id="nav">
+  <button data-tab="contar" class="on"><span class="ic">➕</span>Contar</button>
+  <button data-tab="relatorio"><span class="ic">📊</span>Relatório</button>
+  <button data-tab="talhoes"><span class="ic">🗺️</span>Talhões</button>
+  <button data-tab="dados"><span class="ic">⚙️</span>Dados</button>
+</nav>
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+<div class="flash" id="flash"></div>
+
+<script>
+'use strict';
+const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador';
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const dBR=s=>{if(!s)return'';const[y,m,d]=s.split('-');return d+'/'+m+'/'+y.slice(2);};
+const N=(v,dc=1)=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:dc,maximumFractionDigits:dc});
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function seed(){
+  return {talhoes:[
+    {id:uid(),nome:'Santa Rita'},{id:uid(),nome:'Boa Vista'},{id:uid(),nome:'Serra'}
+  ],registros:[]};
+}
+let db, operador=localStorage.getItem(OPKEY)||'';
+try{db=JSON.parse(localStorage.getItem(LS))||seed();}catch(e){db=seed();}
+if(!db.talhoes)db.talhoes=[];if(!db.registros)db.registros=[];
+const save=()=>{try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){}};
+
+let tab='contar', talhaoAtivo=(db.talhoes[0]||{}).id||'';
+
+function flash(t){const f=document.getElementById('flash');f.textContent=t;f.classList.add('on');
+  clearTimeout(f._t);f._t=setTimeout(()=>f.classList.remove('on'),1400);}
+
+/* soma helpers */
+const somaReg=arr=>arr.reduce((a,r)=>a+r.carretas,0);
+const talNome=id=>(db.talhoes.find(t=>t.id===id)||{nome:'—'}).nome;
+
+/* ---------- CONTAR ---------- */
+function vCounter(origem,cls,emoji,nome){
+  const hoje=today();
+  const tot=somaReg(db.registros.filter(r=>r.origem===origem&&r.talhaoId===talhaoAtivo&&r.data===hoje));
+  return `<div class="counter ${cls}">
+    <div class="top"><span class="nome">${emoji} ${nome}</span></div>
+    <div><div class="tot">${N(tot)}</div><div class="un">carretas hoje</div></div>
+    <div class="btns tri">
+      <button class="badd bsub" data-add="${origem}" data-q="-1">−1</button>
+      <button class="badd" data-add="${origem}" data-q="0.5">+½</button>
+      <button class="badd" data-add="${origem}" data-q="1">+1</button>
+    </div></div>`;
+}
+function pgContar(){
+  if(!db.talhoes.length){
+    return `<div class="empty">Cadastre um talhão para começar a contar.<br><br>
+      <button class="btn sm" style="margin:0 auto" onclick="go('talhoes')">Cadastrar talhão</button></div>`;
+  }
+  if(!db.talhoes.find(t=>t.id===talhaoAtivo))talhaoAtivo=db.talhoes[0].id;
+  const hoje=today();
+  const totDia=somaReg(db.registros.filter(r=>r.data===hoje&&r.talhaoId===talhaoAtivo));
+  return `
+  <div class="field"><label>Talhão sendo colhido</label>
+    <select id="selTal">${db.talhoes.map(t=>`<option value="${t.id}" ${t.id===talhaoAtivo?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
+  <div class="counters">
+    ${vCounter('arvore','arv','🌳','Árvore')}
+    ${vCounter('chao','cha','🍂','Chão')}
+  </div>
+  <div class="daytot"><span class="k">Total do talhão hoje (${dBR(hoje)})</span><span class="v">${N(totDia)}</span></div>
+  <h2>Lançamentos de hoje</h2>
+  ${(()=>{const rs=db.registros.filter(r=>r.data===hoje).sort((a,b)=>b.ts-a.ts).slice(0,20);
+    if(!rs.length)return '<div class="empty">Nenhuma carreta lançada hoje ainda.</div>';
+    return `<div class="card" style="padding:4px 12px">${rs.map(r=>`<div class="totrow" style="grid-template-columns:1fr auto auto">
+      <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span></span>
+      <b>${r.carretas>0?'+':''}${N(r.carretas)}</b>
+      <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>`;})()}`;
+}
+
+/* ---------- RELATÓRIO ---------- */
+let repDe='', repAte='';
+function pgRelatorio(){
+  const datas=[...new Set(db.registros.map(r=>r.data))].sort();
+  const de=repDe||datas[0]||today(), ate=repAte||datas[datas.length-1]||today();
+  const rs=db.registros.filter(r=>r.data>=de&&r.data<=ate);
+  const porTal={};
+  db.talhoes.forEach(t=>porTal[t.id]={arv:0,cha:0});
+  rs.forEach(r=>{if(!porTal[r.talhaoId])porTal[r.talhaoId]={arv:0,cha:0};
+    porTal[r.talhaoId][r.origem==='arvore'?'arv':'cha']+=r.carretas;});
+  const totArv=rs.filter(r=>r.origem==='arvore').reduce((a,r)=>a+r.carretas,0);
+  const totCha=rs.filter(r=>r.origem==='chao').reduce((a,r)=>a+r.carretas,0);
+  const ops=[...new Set(rs.map(r=>r.operador||'—'))];
+  return `
+  <div class="row" style="gap:8px">
+    <div class="field" style="flex:1"><label>De</label><input type="date" id="repDe" value="${de}"></div>
+    <div class="field" style="flex:1"><label>Até</label><input type="date" id="repAte" value="${ate}"></div>
+  </div>
+  <div class="counters">
+    <div class="counter arv"><span class="nome">🌳 Árvore</span><div><div class="tot">${N(totArv)}</div><div class="un">carretas no período</div></div></div>
+    <div class="counter cha"><span class="nome">🍂 Chão</span><div><div class="tot">${N(totCha)}</div><div class="un">carretas no período</div></div></div>
+  </div>
+  <div class="daytot"><span class="k">Total geral</span><span class="v">${N(totArv+totCha)}</span></div>
+  <h2>Por talhão</h2>
+  <div class="card" style="padding:4px 12px">
+    <div class="totrow head"><span>Talhão</span><span>🌳 Árv.</span><span>🍂 Chão</span><span>Total</span></div>
+    ${db.talhoes.map(t=>{const x=porTal[t.id]||{arv:0,cha:0};if(!x.arv&&!x.cha)return'';
+      return `<div class="totrow"><span>${esc(t.nome)}</span><b>${N(x.arv)}</b><b>${N(x.cha)}</b><b>${N(x.arv+x.cha)}</b></div>`;}).join('')
+      ||'<div class="empty">Sem registros no período.</div>'}
+  </div>
+  ${ops.length>1?`<h2>Por operador</h2><div class="card" style="padding:4px 12px">
+    ${ops.map(o=>{const v=rs.filter(r=>(r.operador||'—')===o).reduce((a,r)=>a+r.carretas,0);
+      return `<div class="totrow" style="grid-template-columns:1fr auto"><span>${esc(o)}</span><b>${N(v)}</b></div>`;}).join('')}
+  </div>`:''}
+  <div class="btnrow" style="margin-top:16px">
+    <button class="btn" onclick="enviarWhats()">📲 Enviar resumo pelo WhatsApp</button>
+    <button class="btn ghost" onclick="exportCSV()">📄 Baixar planilha (CSV)</button>
+  </div>`;
+}
+function resumoTexto(){
+  const datas=[...new Set(db.registros.map(r=>r.data))].sort();
+  const de=repDe||datas[0]||today(), ate=repAte||datas[datas.length-1]||today();
+  const rs=db.registros.filter(r=>r.data>=de&&r.data<=ate);
+  const totArv=rs.filter(r=>r.origem==='arvore').reduce((a,r)=>a+r.carretas,0);
+  const totCha=rs.filter(r=>r.origem==='chao').reduce((a,r)=>a+r.carretas,0);
+  let t=`☕ Gefaz Conta — Carretas de café\n${dBR(de)} a ${dBR(ate)}\nOperador: ${operador||'—'}\n\n`;
+  db.talhoes.forEach(tl=>{
+    const a=rs.filter(r=>r.talhaoId===tl.id&&r.origem==='arvore').reduce((s,r)=>s+r.carretas,0);
+    const c=rs.filter(r=>r.talhaoId===tl.id&&r.origem==='chao').reduce((s,r)=>s+r.carretas,0);
+    if(a||c)t+=`${tl.nome}: 🌳 ${N(a)} · 🍂 ${N(c)} = ${N(a+c)}\n`;
+  });
+  t+=`\nTOTAL: 🌳 ${N(totArv)} + 🍂 ${N(totCha)} = ${N(totArv+totCha)} carretas`;
+  return t;
+}
+function enviarWhats(){
+  const txt=resumoTexto();
+  if(navigator.share){navigator.share({text:txt}).catch(()=>{});}
+  else{window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank');}
+}
+function exportCSV(){
+  const linhas=[['Data','Talhao','Origem','Carretas','Operador']];
+  db.registros.slice().sort((a,b)=>a.data<b.data?-1:1).forEach(r=>
+    linhas.push([r.data,talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',String(r.carretas).replace('.',','),r.operador||'']));
+  const csv='﻿'+linhas.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  baixar(new Blob([csv],{type:'text/csv'}),'gefaz-conta-'+today()+'.csv');
+}
+
+/* ---------- TALHÕES ---------- */
+function pgTalhoes(){
+  return `
+  <div class="card">
+    <div class="field"><label>Nome do novo talhão</label>
+      <input id="novoTal" placeholder="Ex: Chapadão" autocomplete="off"></div>
+    <button class="btn" onclick="addTalhao()">Cadastrar talhão</button>
+  </div>
+  <h2>Talhões (${db.talhoes.length})</h2>
+  ${db.talhoes.length?`<div class="card" style="padding:4px 12px">${db.talhoes.map(t=>{
+    const tot=somaReg(db.registros.filter(r=>r.talhaoId===t.id));
+    return `<div class="totrow" style="grid-template-columns:1fr auto auto">
+      <span>${esc(t.nome)}</span><b>${N(tot)} carr.</b>
+      <button class="del" data-delt="${t.id}">✕</button></div>`;}).join('')}</div>`
+    :'<div class="empty">Nenhum talhão cadastrado.</div>'}`;
+}
+function addTalhao(){
+  const el=document.getElementById('novoTal'),nome=(el.value||'').trim();
+  if(!nome){el.focus();return;}
+  db.talhoes.push({id:uid(),nome});save();
+  if(!talhaoAtivo)talhaoAtivo=db.talhoes[db.talhoes.length-1].id;
+  flash('Talhão cadastrado');render();
+}
+
+/* ---------- DADOS ---------- */
+function pgDados(){
+  const nReg=db.registros.length, tot=somaReg(db.registros);
+  return `
+  <div class="card">
+    <div class="field"><label>Operador deste aparelho</label>
+      <input id="opNome" value="${esc(operador)}" placeholder="Seu nome" autocomplete="off"></div>
+    <button class="btn" onclick="salvarOp()">Salvar nome</button>
+    <div class="msg">Seu nome fica em cada carreta lançada — é o que separa a contagem de cada operador quando o gestor junta tudo.</div>
+  </div>
+  <h2>Consolidar (gestor)</h2>
+  <div class="card">
+    <div class="btnrow">
+      <button class="btn" onclick="exportJSON()">💾 Exportar meus dados (backup)</button>
+      <label class="btn ghost" style="text-align:center;cursor:pointer">📥 Importar / juntar de outro operador
+        <input type="file" id="imp" accept=".json" class="hide"></label>
+    </div>
+    <div class="msg">Cada operador exporta o backup e te envia (WhatsApp/e-mail). Você importa os arquivos um a um — o app <b>soma sem duplicar</b>, então dá para juntar a contagem dos três aparelhos aqui.</div>
+    <div id="impMsg" class="msg hide"></div>
+  </div>
+  <h2>Resumo neste aparelho</h2>
+  <div class="card">
+    <div class="totrow" style="grid-template-columns:1fr auto"><span>Carretas lançadas</span><b>${N(tot)}</b></div>
+    <div class="totrow" style="grid-template-columns:1fr auto"><span>Registros</span><b>${nReg}</b></div>
+    <div class="totrow" style="grid-template-columns:1fr auto"><span>Talhões</span><b>${db.talhoes.length}</b></div>
+  </div>
+  <div class="btnrow" style="margin-top:12px">
+    <button class="btn ghost" onclick="zerar()" style="color:var(--crit)">Zerar contagem (mantém talhões)</button>
+  </div>
+  <div class="msg" style="margin-top:14px;text-align:center">Gefaz Conta · derivado do Gefaz360 · dados salvos neste aparelho</div>`;
+}
+function salvarOp(){operador=(document.getElementById('opNome').value||'').trim();
+  localStorage.setItem(OPKEY,operador);flash('Nome salvo');render();}
+function exportJSON(){
+  const dump={app:'gefaz-conta',v:1,operador,exportadoEm:new Date().toISOString(),
+    talhoes:db.talhoes,registros:db.registros};
+  baixar(new Blob([JSON.stringify(dump)],{type:'application/json'}),
+    'gefaz-conta-'+(operador||'backup').replace(/\s+/g,'-').toLowerCase()+'-'+today()+'.json');
+}
+function importJSON(file){
+  const box=document.getElementById('impMsg');
+  file.text().then(t=>{
+    const d=JSON.parse(t);
+    if(d.app!=='gefaz-conta'||!Array.isArray(d.registros))throw 0;
+    /* junta talhões por nome (evita duplicar), mapeia ids */
+    const idMap={};
+    (d.talhoes||[]).forEach(t=>{
+      let ex=db.talhoes.find(x=>x.nome.toLowerCase()===t.nome.toLowerCase());
+      if(!ex){ex={id:uid(),nome:t.nome};db.talhoes.push(ex);}
+      idMap[t.id]=ex.id;
+    });
+    let novos=0;
+    (d.registros||[]).forEach(r=>{
+      if(db.registros.some(x=>x.id===r.id))return; /* dedup por id */
+      db.registros.push({...r,talhaoId:idMap[r.talhaoId]||r.talhaoId});novos++;
+    });
+    save();render();
+    const b=document.getElementById('impMsg');
+    if(b){b.classList.remove('hide');b.textContent=`Importado de ${d.operador||'operador'}: ${novos} registro(s) novo(s) somado(s).`;}
+    flash(novos+' registros somados');
+  }).catch(()=>{if(box){box.classList.remove('hide');box.textContent='Arquivo inválido — use um backup exportado pelo Gefaz Conta.';}});
+}
+function zerar(){
+  if(!confirm('Apagar TODAS as carretas lançadas neste aparelho? Os talhões são mantidos.'))return;
+  db.registros=[];save();flash('Contagem zerada');render();
+}
+function baixar(blob,nome){const u=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=u;a.download=nome;a.click();setTimeout(()=>URL.revokeObjectURL(u),2000);}
+
+/* ---------- operador no primeiro uso ---------- */
+function pedirOperador(){
+  const s=document.getElementById('sheet');
+  s.innerHTML=`<h3>Quem está contando?</h3>
+    <div class="field"><label>Seu nome (operador)</label>
+      <input id="opFirst" placeholder="Ex: João" autocomplete="off"></div>
+    <button class="btn" onclick="confOp()">Começar</button>`;
+  document.getElementById('modal').classList.add('on');
+  setTimeout(()=>{const i=document.getElementById('opFirst');if(i)i.focus();},80);
+}
+function confOp(){const v=(document.getElementById('opFirst').value||'').trim();
+  operador=v||'Operador';localStorage.setItem(OPKEY,operador);
+  document.getElementById('modal').classList.remove('on');render();}
+
+/* ---------- render ---------- */
+const PAGES={contar:pgContar,relatorio:pgRelatorio,talhoes:pgTalhoes,dados:pgDados};
+function go(t){tab=t;render();}
+function render(){
+  document.getElementById('opChip').textContent='👤 '+(operador||'definir');
+  document.getElementById('main').innerHTML=PAGES[tab]();
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  const imp=document.getElementById('imp');
+  if(imp)imp.onchange=e=>{if(e.target.files[0])importJSON(e.target.files[0]);};
+}
+
+/* eventos */
+document.getElementById('nav').addEventListener('click',e=>{
+  const b=e.target.closest('[data-tab]');if(b)go(b.dataset.tab);});
+document.getElementById('opChip').addEventListener('click',()=>{tab='dados';render();});
+document.getElementById('main').addEventListener('click',e=>{
+  const add=e.target.closest('[data-add]');
+  if(add){
+    const q=parseFloat(add.dataset.q);
+    const hoje=today();
+    if(q<0){ /* -1: remove do total de hoje desse talhão/origem, sem ir negativo */
+      const atual=somaReg(db.registros.filter(r=>r.origem===add.dataset.add&&r.talhaoId===talhaoAtivo&&r.data===hoje));
+      if(atual<=0){flash('Nada para remover');return;}
+    }
+    db.registros.push({id:uid(),data:hoje,talhaoId:talhaoAtivo,origem:add.dataset.add,
+      carretas:q,operador,ts:Date.now()});
+    save();
+    if(navigator.vibrate)navigator.vibrate(q<0?20:35);
+    render();return;
+  }
+  const del=e.target.closest('[data-del]');
+  if(del){db.registros=db.registros.filter(r=>r.id!==del.dataset.del);save();render();return;}
+  const delt=e.target.closest('[data-delt]');
+  if(delt){const id=delt.dataset.delt;
+    const n=db.registros.filter(r=>r.talhaoId===id).length;
+    if(n&&!confirm('Este talhão tem '+n+' lançamento(s). Excluir mesmo assim?'))return;
+    db.talhoes=db.talhoes.filter(t=>t.id!==id);
+    db.registros=db.registros.filter(r=>r.talhaoId!==id);
+    if(talhaoAtivo===id)talhaoAtivo=(db.talhoes[0]||{}).id||'';
+    save();flash('Talhão excluído');render();return;}
+});
+document.getElementById('main').addEventListener('change',e=>{
+  if(e.target.id==='selTal'){talhaoAtivo=e.target.value;render();}
+  else if(e.target.id==='repDe'){repDe=e.target.value;render();}
+  else if(e.target.id==='repAte'){repAte=e.target.value;render();}
+});
+
+/* PWA */
+if('serviceWorker' in navigator){
+  try{navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
+}
+
+render();
+if(!operador)pedirOperador();
+</script>
+</body>
+</html>
