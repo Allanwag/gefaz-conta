@@ -9,22 +9,18 @@ Derivado do Gefaz360, para uso em campo por você e os operadores.
 
 ## Como publicar no GitHub Pages
 
-1. Crie um repositório novo (ex.: `gefaz-conta`) na sua conta.
-2. Suba todos estes arquivos na raiz do repositório:
-   `index.html`, `manifest.json`, `sw.js`, `icon-192.png`, `icon-512.png`, `README.md`.
-3. No repositório: **Settings → Pages → Branch: `main` / `/root` → Save**.
-4. Em ~1 minuto o app estará em `https://SEU-USUARIO.github.io/gefaz-conta/`.
+O repositório local já está pronto (git iniciado, arquivos commitados, remote
+apontando para `https://github.com/allanwag/gefaz-conta.git`). Falta só:
 
-Pelo terminal, dentro desta pasta:
-
-```bash
-git init
-git add .
-git commit -m "Gefaz Conta - contagem de carretas de cafe"
-git branch -M main
-git remote add origin https://github.com/SEU-USUARIO/gefaz-conta.git
-git push -u origin main
-```
+1. Crie o repositório vazio **`gefaz-conta`** na sua conta GitHub (allanwag) —
+   não marque nenhuma opção de inicializar com README/licença.
+2. No terminal, dentro da pasta `Documents\gefaz-conta`:
+   ```bash
+   git push -u origin main
+   ```
+   (o Windows deve abrir a janela de login do GitHub na primeira vez).
+3. No repositório: **Settings → Pages → Branch: `main` / `/(root)` → Save**.
+4. Em ~1 minuto o app estará em `https://allanwag.github.io/gefaz-conta/`.
 
 ## Como os 3 usam
 
