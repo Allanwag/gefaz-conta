@@ -157,7 +157,7 @@ function vCounter(origem,cls,emoji,nome){
   const tot=somaReg(db.registros.filter(r=>r.origem===origem&&r.talhaoId===talhaoAtivo&&r.data===hoje&&PASS(r)===passadaAtiva));
   return `<div class="counter ${cls}">
     <div class="top"><span class="nome">${emoji} ${nome}</span></div>
-    <div><div class="tot">${N(tot)}</div><div class="un">carretas · ${passLbl(passadaAtiva).replace(' passada','ª')}</div></div>
+    <div><div class="tot">${N(tot)}</div><div class="un">carretas · ${passadaAtiva}ª passada</div></div>
     <div class="btns tri">
       <button class="badd bsub" data-add="${origem}" data-q="-1">−1</button>
       <button class="badd" data-add="${origem}" data-q="0.5">+½</button>
