@@ -113,10 +113,10 @@
 </header>
 <main id="main"></main>
 <nav id="nav">
-  <button data-tab="contar" class="on"><span class="ic">➕</span>Contar</button>
+  <button data-tab="contar" class="on"><span class="ic">+</span>Contar</button>
   <button data-tab="relatorio"><span class="ic">R</span>Relatório</button>
-  <button data-tab="talhoes"><span class="ic">🗺️</span>Talhões</button>
-  <button data-tab="dados"><span class="ic">⚙️</span>Dados</button>
+  <button data-tab="talhoes"><span class="ic">T</span>Talhões</button>
+  <button data-tab="dados"><span class="ic">D</span>Dados</button>
 </nav>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="flash" id="flash"></div>
@@ -237,8 +237,8 @@ function pgRelatorio(){
       return `<div class="totrow" style="grid-template-columns:1fr auto"><span>${esc(o)}</span><b>${N(v)}</b></div>`;}).join('')}
   </div>`:''}
   <div class="btnrow" style="margin-top:16px">
-    <button class="btn" onclick="enviarWhats()">📲 Enviar resumo pelo WhatsApp</button>
-    <button class="btn ghost" onclick="exportCSV()">📄 Baixar planilha (CSV)</button>
+    <button class="btn" onclick="enviarWhats()">Enviar resumo pelo WhatsApp</button>
+    <button class="btn ghost" onclick="exportCSV()">Baixar planilha (CSV)</button>
   </div>`;
 }
 function resumoTexto(){
@@ -309,8 +309,8 @@ function pgDados(){
   <h2>Consolidar (gestor)</h2>
   <div class="card">
     <div class="btnrow">
-      <button class="btn" onclick="exportJSON()">💾 Exportar meus dados (backup)</button>
-      <label class="btn ghost" style="text-align:center;cursor:pointer">📥 Importar / juntar de outro operador
+      <button class="btn" onclick="exportJSON()">Exportar meus dados (backup)</button>
+      <label class="btn ghost" style="text-align:center;cursor:pointer">Importar / juntar de outro operador
         <input type="file" id="imp" accept=".json" class="hide"></label>
     </div>
     <div class="msg">Cada operador exporta o backup e te envia (WhatsApp/e-mail). Você importa os arquivos um a um — o app <b>soma sem duplicar</b>, então dá para juntar a contagem dos três aparelhos aqui.</div>
@@ -383,7 +383,7 @@ function confOp(){const v=(document.getElementById('opFirst').value||'').trim();
 const PAGES={contar:pgContar,relatorio:pgRelatorio,talhoes:pgTalhoes,dados:pgDados};
 function go(t){tab=t;render();}
 function render(){
-  document.getElementById('opChip').textContent='👤 '+(operador||'definir');
+  document.getElementById('opChip').textContent=(operador||'definir');
   document.getElementById('main').innerHTML=PAGES[tab]();
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   const imp=document.getElementById('imp');
