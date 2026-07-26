@@ -108,13 +108,13 @@
 </head>
 <body>
 <header>
-  <div class="logo">☕ Gefaz Conta<small>Carretas de café</small></div>
+  <div class="logo">Gefaz Conta<small>Carretas de café</small></div>
   <div class="op" id="opChip" title="Trocar operador"></div>
 </header>
 <main id="main"></main>
 <nav id="nav">
   <button data-tab="contar" class="on"><span class="ic">➕</span>Contar</button>
-  <button data-tab="relatorio"><span class="ic">📊</span>Relatório</button>
+  <button data-tab="relatorio"><span class="ic">R</span>Relatório</button>
   <button data-tab="talhoes"><span class="ic">🗺️</span>Talhões</button>
   <button data-tab="dados"><span class="ic">⚙️</span>Dados</button>
 </nav>
@@ -152,11 +152,11 @@ const somaReg=arr=>arr.reduce((a,r)=>a+r.carretas,0);
 const talNome=id=>(db.talhoes.find(t=>t.id===id)||{nome:'—'}).nome;
 
 /* ---------- CONTAR ---------- */
-function vCounter(origem,cls,emoji,nome){
+function vCounter(origem,cls,nome){
   const hoje=today();
   const tot=somaReg(db.registros.filter(r=>r.origem===origem&&r.talhaoId===talhaoAtivo&&r.data===hoje&&PASS(r)===passadaAtiva));
   return `<div class="counter ${cls}">
-    <div class="top"><span class="nome">${emoji} ${nome}</span></div>
+    <div class="top"><span class="nome">${nome}</span></div>
     <div><div class="tot">${N(tot)}</div><div class="un">carretas · ${passadaAtiva}ª passada</div></div>
     <div class="btns tri">
       <button class="badd bsub" data-add="${origem}" data-q="-1">−1</button>
@@ -181,8 +181,8 @@ function pgContar(){
       <button data-pass="2" class="${passadaAtiva===2?'on':''}">2ª passada</button>
     </div></div>
   <div class="counters">
-    ${vCounter('arvore','arv','🌳','Árvore')}
-    ${vCounter('chao','cha','🍂','Chão')}
+    ${vCounter('arvore','arv','Árvore')}
+    ${vCounter('chao','cha','Chão')}
   </div>
   <div class="daytot"><span class="k">Total do talhão hoje (${dBR(hoje)})<br><span style="font-size:11px">1ª ${N(somaReg(db.registros.filter(r=>r.data===hoje&&r.talhaoId===talhaoAtivo&&PASS(r)===1)))} · 2ª ${N(somaReg(db.registros.filter(r=>r.data===hoje&&r.talhaoId===talhaoAtivo&&PASS(r)===2)))}</span></span><span class="v">${N(totDia)}</span></div>
   <h2>Lançamentos de hoje</h2>
@@ -219,7 +219,7 @@ function pgRelatorio(){
   <div class="daytot"><span class="k">Total geral</span><span class="v">${N(totArv+totCha)}</span></div>
   <h2>Por passada</h2>
   <div class="card" style="padding:4px 12px">
-    <div class="totrow head"><span>Passada</span><span>🌳 Árv.</span><span>🍂 Chão</span><span>Total</span></div>
+    <div class="totrow head"><span>Passada</span><span>Árv.</span><span>Chão</span><span>Total</span></div>
     ${[1,2].map(pp=>{const rp=rs.filter(r=>PASS(r)===pp);
       const a=rp.filter(r=>r.origem==='arvore').reduce((s,r)=>s+r.carretas,0);
       const c=rp.filter(r=>r.origem==='chao').reduce((s,r)=>s+r.carretas,0);
@@ -227,7 +227,7 @@ function pgRelatorio(){
   </div>
   <h2>Por talhão</h2>
   <div class="card" style="padding:4px 12px">
-    <div class="totrow head"><span>Talhão</span><span>🌳 Árv.</span><span>🍂 Chão</span><span>Total</span></div>
+    <div class="totrow head"><span>Talhão</span><span>Árv.</span><span>Chão</span><span>Total</span></div>
     ${db.talhoes.map(t=>{const x=porTal[t.id]||{arv:0,cha:0};if(!x.arv&&!x.cha)return'';
       return `<div class="totrow"><span>${esc(t.nome)}</span><b>${N(x.arv)}</b><b>${N(x.cha)}</b><b>${N(x.arv+x.cha)}</b></div>`;}).join('')
       ||'<div class="empty">Sem registros no período.</div>'}
