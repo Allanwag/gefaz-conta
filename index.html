@@ -132,13 +132,25 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 
 function seed(){
   return {talhoes:[
-    {id:uid(),nome:'Santa Rita'},{id:uid(),nome:'Boa Vista'},{id:uid(),nome:'Serra'}
+    {id:uid(),nome:'Velho'},{id:uid(),nome:'Larga'},{id:uid(),nome:'Cantinho'},
+    {id:uid(),nome:'144 Gordura'},{id:uid(),nome:'Topázio Ruziziensis'},
+    {id:uid(),nome:'Topázio Rocinha'},{id:uid(),nome:'144 Rocinha'}
   ],registros:[]};
 }
 let db, operador=localStorage.getItem(OPKEY)||'';
 try{db=JSON.parse(localStorage.getItem(LS))||seed();}catch(e){db=seed();}
 if(!db.talhoes)db.talhoes=[];if(!db.registros)db.registros=[];
 const save=()=>{try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){}};
+(function garanteTalhoesPadrao(){
+  const padrao=['Velho','Larga','Cantinho','144 Gordura','Topázio Ruziziensis','Topázio Rocinha','144 Rocinha'];
+  let mudou=false;
+  padrao.forEach(nome=>{
+    if(!db.talhoes.find(t=>t.nome.toLowerCase()===nome.toLowerCase())){
+      db.talhoes.push({id:uid(),nome});mudou=true;
+    }
+  });
+  if(mudou)save();
+})();
 
 let tab='contar', talhaoAtivo=(db.talhoes[0]||{}).id||'', passadaAtiva=1;
 const PASS=r=>r.passada||1;
