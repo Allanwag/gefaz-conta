@@ -213,8 +213,8 @@ function pgRelatorio(){
     <div class="field" style="flex:1"><label>Até</label><input type="date" id="repAte" value="${ate}"></div>
   </div>
   <div class="counters">
-    <div class="counter arv"><span class="nome">🌳 Árvore</span><div><div class="tot">${N(totArv)}</div><div class="un">carretas no período</div></div></div>
-    <div class="counter cha"><span class="nome">🍂 Chão</span><div><div class="tot">${N(totCha)}</div><div class="un">carretas no período</div></div></div>
+    <div class="counter arv"><span class="nome">Árvore</span><div><div class="tot">${N(totArv)}</div><div class="un">carretas no período</div></div></div>
+    <div class="counter cha"><span class="nome">Chão</span><div><div class="tot">${N(totCha)}</div><div class="un">carretas no período</div></div></div>
   </div>
   <div class="daytot"><span class="k">Total geral</span><span class="v">${N(totArv+totCha)}</span></div>
   <h2>Por passada</h2>
@@ -247,16 +247,16 @@ function resumoTexto(){
   const rs=db.registros.filter(r=>r.data>=de&&r.data<=ate);
   const totArv=rs.filter(r=>r.origem==='arvore').reduce((a,r)=>a+r.carretas,0);
   const totCha=rs.filter(r=>r.origem==='chao').reduce((a,r)=>a+r.carretas,0);
-  let t=`☕ Gefaz Conta — Carretas de café\n${dBR(de)} a ${dBR(ate)}\nOperador: ${operador||'—'}\n\n`;
+  let t=`Gefaz Conta — Carretas de café\n${dBR(de)} a ${dBR(ate)}\nOperador: ${operador||'—'}\n\n`;
   db.talhoes.forEach(tl=>{
     const a=rs.filter(r=>r.talhaoId===tl.id&&r.origem==='arvore').reduce((s,r)=>s+r.carretas,0);
     const c=rs.filter(r=>r.talhaoId===tl.id&&r.origem==='chao').reduce((s,r)=>s+r.carretas,0);
-    if(a||c)t+=`${tl.nome}: 🌳 ${N(a)} · 🍂 ${N(c)} = ${N(a+c)}\n`;
+    if(a||c)t+=`${tl.nome}: Árvore ${N(a)} · Chão ${N(c)} = ${N(a+c)}\n`;
   });
   const p1=rs.filter(r=>PASS(r)===1).reduce((s,r)=>s+r.carretas,0);
   const p2=rs.filter(r=>PASS(r)===2).reduce((s,r)=>s+r.carretas,0);
   t+=`\nPor passada: 1ª ${N(p1)} · 2ª ${N(p2)}`;
-  t+=`\nTOTAL: 🌳 ${N(totArv)} + 🍂 ${N(totCha)} = ${N(totArv+totCha)} carretas`;
+  t+=`\nTOTAL: Árvore ${N(totArv)} + Chão ${N(totCha)} = ${N(totArv+totCha)} carretas`;
   return t;
 }
 function enviarWhats(){
