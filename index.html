@@ -127,6 +127,7 @@ const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const dBR=s=>{if(!s)return'';const[y,m,d]=s.split('-');return d+'/'+m+'/'+y.slice(2);};
+const hBR=ts=>{if(!ts)return'';const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
 const N=(v,dc=1)=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:dc,maximumFractionDigits:dc});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -201,7 +202,7 @@ function pgContar(){
   ${(()=>{const rs=db.registros.filter(r=>r.data===hoje).sort((a,b)=>b.ts-a.ts).slice(0,20);
     if(!rs.length)return '<div class="empty">Nenhuma carreta lançada hoje ainda.</div>';
     return `<div class="card" style="padding:4px 12px">${rs.map(r=>`<div class="totrow" style="grid-template-columns:1fr auto auto">
-      <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span> <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª</span></span>
+      <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span> <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}</span></span>
       <b>${r.carretas>0?'+':''}${N(r.carretas)}</b>
       <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>`;})()}`;
 }
@@ -277,9 +278,9 @@ function enviarWhats(){
   else{window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank');}
 }
 function exportCSV(){
-  const linhas=[['Data','Talhao','Origem','Passada','Carretas','Operador']];
-  db.registros.slice().sort((a,b)=>a.data<b.data?-1:1).forEach(r=>
-    linhas.push([r.data,talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',PASS(r)+'a',String(r.carretas).replace('.',','),r.operador||'']));
+  const linhas=[['Data','Hora','Talhao','Origem','Passada','Carretas','Operador']];
+  db.registros.slice().sort((a,b)=>a.ts-b.ts).forEach(r=>
+    linhas.push([r.data,hBR(r.ts),talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',PASS(r)+'a',String(r.carretas).replace('.',','),r.operador||'']));
   const csv='﻿'+linhas.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
   baixar(new Blob([csv],{type:'text/csv'}),'gefaz-conta-'+today()+'.csv');
 }
