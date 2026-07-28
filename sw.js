@@ -1,8 +1,8 @@
-const CACHE = 'gefaz-conta-v7';
+const CACHE = 'gefaz-conta-v8';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c =>
-    Promise.all(ASSETS.map(a => c.add(a).catch(() => null)))
+    Promise.all(ASSETS.map(a => fetch(a, { cache: 'reload' }).then(res => c.put(a, res)).catch(() => null)))
   ).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
