@@ -153,7 +153,7 @@ const save=()=>{try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){}};
   if(mudou)save();
 })();
 
-let tab='contar', talhaoAtivo=(db.talhoes[0]||{}).id||'', passadaAtiva=1;
+let tab='contar', talhaoAtivo=(db.talhoes[0]||{}).id||'', passadaAtiva=1, maquinaAtiva='';
 const PASS=r=>r.passada||1;
 const passLbl=p=>p===2?'2ª passada':'1ª passada';
 
@@ -185,9 +185,13 @@ function pgContar(){
   if(!db.talhoes.find(t=>t.id===talhaoAtivo))talhaoAtivo=db.talhoes[0].id;
   const hoje=today();
   const totDia=somaReg(db.registros.filter(r=>r.data===hoje&&r.talhaoId===talhaoAtivo));
+  const maqs=[...new Set(db.registros.map(r=>r.maquina).filter(Boolean))].sort();
   return `
   <div class="field"><label>Talhão sendo colhido</label>
     <select id="selTal">${db.talhoes.map(t=>`<option value="${t.id}" ${t.id===talhaoAtivo?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
+  <div class="field"><label>Máquina que está colhendo</label>
+    <input id="inpMaquina" list="listMaquinas" value="${esc(maquinaAtiva)}" placeholder="Ex: Colhedora 1" autocomplete="off">
+    <datalist id="listMaquinas">${maqs.map(m=>`<option value="${esc(m)}">`).join('')}</datalist></div>
   <div class="field"><label>Passada</label>
     <div class="seg" id="segPass">
       <button data-pass="1" class="${passadaAtiva===1?'on':''}">1ª passada</button>
@@ -202,7 +206,7 @@ function pgContar(){
   ${(()=>{const rs=db.registros.filter(r=>r.data===hoje).sort((a,b)=>b.ts-a.ts).slice(0,20);
     if(!rs.length)return '<div class="empty">Nenhuma carreta lançada hoje ainda.</div>';
     return `<div class="card" style="padding:4px 12px">${rs.map(r=>`<div class="totrow" style="grid-template-columns:1fr auto auto">
-      <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span> <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}</span></span>
+      <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span> <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}${r.maquina?' · '+esc(r.maquina):''}</span></span>
       <b>${r.carretas>0?'+':''}${N(r.carretas)}</b>
       <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>`;})()}`;
 }
@@ -220,6 +224,7 @@ function pgRelatorio(){
   const totArv=rs.filter(r=>r.origem==='arvore').reduce((a,r)=>a+r.carretas,0);
   const totCha=rs.filter(r=>r.origem==='chao').reduce((a,r)=>a+r.carretas,0);
   const ops=[...new Set(rs.map(r=>r.operador||'—'))];
+  const maqsRep=[...new Set(rs.map(r=>r.maquina).filter(Boolean))].sort();
   return `
   <div class="row" style="gap:8px">
     <div class="field" style="flex:1"><label>De</label><input type="date" id="repDe" value="${de}"></div>
@@ -249,6 +254,10 @@ function pgRelatorio(){
     ${ops.map(o=>{const v=rs.filter(r=>(r.operador||'—')===o).reduce((a,r)=>a+r.carretas,0);
       return `<div class="totrow" style="grid-template-columns:1fr auto"><span>${esc(o)}</span><b>${N(v)}</b></div>`;}).join('')}
   </div>`:''}
+  ${maqsRep.length?`<h2>Por máquina</h2><div class="card" style="padding:4px 12px">
+    ${maqsRep.map(m=>{const v=rs.filter(r=>(r.maquina||'')===m).reduce((a,r)=>a+r.carretas,0);
+      return `<div class="totrow" style="grid-template-columns:1fr auto"><span>${esc(m)}</span><b>${N(v)}</b></div>`;}).join('')}
+  </div>`:''}
   <div class="btnrow" style="margin-top:16px">
     <button class="btn" onclick="enviarWhats()">📲 Enviar resumo pelo WhatsApp</button>
     <button class="btn ghost" onclick="exportCSV()">📄 Baixar planilha (CSV)</button>
@@ -269,6 +278,13 @@ function resumoTexto(){
   const p1=rs.filter(r=>PASS(r)===1).reduce((s,r)=>s+r.carretas,0);
   const p2=rs.filter(r=>PASS(r)===2).reduce((s,r)=>s+r.carretas,0);
   t+=`\nPor passada: 1ª ${N(p1)} · 2ª ${N(p2)}`;
+  const maqsTxt=[...new Set(rs.map(r=>r.maquina).filter(Boolean))].sort();
+  if(maqsTxt.length){
+    t+=`\n\nPor máquina:\n`;
+    maqsTxt.forEach(m=>{const v=rs.filter(r=>(r.maquina||'')===m).reduce((s,r)=>s+r.carretas,0);
+      t+=`${m}: ${N(v)}\n`;});
+    t=t.replace(/\n$/,'');
+  }
   t+=`\nTOTAL: Árvore ${N(totArv)} + Chão ${N(totCha)} = ${N(totArv+totCha)} carretas`;
   return t;
 }
@@ -278,9 +294,9 @@ function enviarWhats(){
   else{window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank');}
 }
 function exportCSV(){
-  const linhas=[['Data','Hora','Talhao','Origem','Passada','Carretas','Operador']];
+  const linhas=[['Data','Hora','Talhao','Origem','Passada','Carretas','Operador','Maquina']];
   db.registros.slice().sort((a,b)=>a.ts-b.ts).forEach(r=>
-    linhas.push([r.data,hBR(r.ts),talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',PASS(r)+'a',String(r.carretas).replace('.',','),r.operador||'']));
+    linhas.push([r.data,hBR(r.ts),talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',PASS(r)+'a',String(r.carretas).replace('.',','),r.operador||'',r.maquina||'']));
   const csv='﻿'+linhas.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
   baixar(new Blob([csv],{type:'text/csv'}),'gefaz-conta-'+today()+'.csv');
 }
@@ -417,7 +433,7 @@ document.getElementById('main').addEventListener('click',e=>{
       if(atual<=0){flash('Nada para remover');return;}
     }
     db.registros.push({id:uid(),data:hoje,talhaoId:talhaoAtivo,origem:add.dataset.add,
-      carretas:q,passada:passadaAtiva,operador,ts:Date.now()});
+      carretas:q,passada:passadaAtiva,operador,maquina:maquinaAtiva,ts:Date.now()});
     save();
     if(navigator.vibrate)navigator.vibrate(q<0?20:35);
     render();return;
@@ -437,6 +453,7 @@ document.getElementById('main').addEventListener('click',e=>{
 });
 document.getElementById('main').addEventListener('change',e=>{
   if(e.target.id==='selTal'){talhaoAtivo=e.target.value;render();}
+  else if(e.target.id==='inpMaquina'){maquinaAtiva=e.target.value.trim();}
   else if(e.target.id==='repDe'){repDe=e.target.value;render();}
   else if(e.target.id==='repAte'){repAte=e.target.value;render();}
 });
