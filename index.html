@@ -123,7 +123,7 @@
 
 <script>
 'use strict';
-const VERSAO='v11';
+const VERSAO='v12';
 const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
@@ -305,6 +305,28 @@ function pgRelatorio(){
       return `<div class="totrow" style="grid-template-columns:1fr auto"><span>${esc(m)}</span><b>${N(v)}</b></div>`;}).join('')}
     ${semMaq?`<div class="totrow" style="grid-template-columns:1fr auto"><span>Sem máquina anotada</span><b>${N(semMaq)}</b></div>`:''}
   </div>`:''}
+  <h2>Por dia</h2>
+  <div class="card" style="padding:4px 12px">
+    <div class="totrow head"><span>Dia</span><span>Árv.</span><span>Chão</span><span>Total</span></div>
+    ${[...new Set(rs.map(r=>r.data))].sort().reverse().map(dt=>{
+      const rd=rs.filter(r=>r.data===dt);
+      const a=somaReg(rd.filter(r=>r.origem==='arvore')), c=somaReg(rd.filter(r=>r.origem==='chao'));
+      return `<div class="totrow"><span>${dBR(dt)}</span><b>${N(a)}</b><b>${N(c)}</b><b>${N(a+c)}</b></div>`;
+    }).join('')||'<div class="empty">Sem registros no período.</div>'}
+  </div>
+  <h2>Lançamentos do período</h2>
+  ${(()=>{
+    /* antes só dava para conferir e apagar lançamento de hoje — carreta errada de dia anterior
+       ficava presa e só saía zerando tudo */
+    const lista=rs.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)), mostra=lista.slice(0,200);
+    if(!mostra.length)return '<div class="empty">Sem registros no período.</div>';
+    return `<div class="card" style="padding:4px 12px">${mostra.map(r=>`<div class="totrow" style="grid-template-columns:1fr auto auto">
+      <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span>
+        <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}${r.maquina?' · '+esc(r.maquina):''}${r.operador?' · '+esc(r.operador):''}</span></span>
+      <b>${carr(r)>0?'+':''}${N(r.carretas)}</b>
+      <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>
+      ${lista.length>mostra.length?`<div class="msg">Mostrando os ${mostra.length} últimos de ${lista.length} lançamentos do período.</div>`:''}`;
+  })()}
   <div class="btnrow" style="margin-top:16px">
     <button class="btn" onclick="enviarWhats()">📲 Enviar resumo pelo WhatsApp</button>
     <button class="btn ghost" onclick="exportCSV()">📄 Baixar planilha (CSV)</button>
