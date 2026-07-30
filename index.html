@@ -123,10 +123,12 @@
 
 <script>
 'use strict';
-const VERSAO='v13';
+const VERSAO='v14';
 const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const dia=(d=new Date())=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today=()=>dia();
+const DATA_OK=/^\d{4}-\d{2}-\d{2}$/;
 const dBR=s=>{if(!s)return'';const[y,m,d]=s.split('-');return d+'/'+m+'/'+y.slice(2);};
 const hBR=ts=>{if(!ts)return'';const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
 const N=(v,dc=1)=>(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:dc,maximumFractionDigits:dc});
@@ -195,7 +197,18 @@ function corrigeNegativos(){
   if(mudou)db.registros=db.registros.filter(r=>carr(r)!==0);
   return mudou;
 }
-if(corrigeNegativos())save();
+/* registro sem data válida sumia de todo o relatório (que filtra por período) mas continuava
+   somando em Dados e na aba Talhões — as contas não fechavam. Usa a hora da gravação. */
+function corrigeDatas(){
+  let mudou=false;
+  db.registros.forEach(r=>{
+    if(DATA_OK.test(r.data))return;
+    r.data=Number(r.ts)?dia(new Date(Number(r.ts))):today();
+    mudou=true;
+  });
+  return mudou;
+}
+if(corrigeNegativos()|corrigeDatas())save();
 
 /* ---------- CONTAR ---------- */
 function vCounter(origem,cls,nome){
@@ -221,7 +234,7 @@ function pgContar(){
   const maqs=[...new Set(db.registros.map(r=>r.maquina).filter(Boolean))].sort();
   return `
   <div class="field"><label>Talhão sendo colhido</label>
-    <select id="selTal">${db.talhoes.map(t=>`<option value="${t.id}" ${t.id===talhaoAtivo?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
+    <select id="selTal">${db.talhoes.map(t=>`<option value="${esc(t.id)}" ${t.id===talhaoAtivo?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
   <div class="field"><label>Máquina que está colhendo</label>
     <input id="inpMaquina" list="listMaquinas" value="${esc(maquinaAtiva)}" placeholder="Ex: Colhedora 1" autocomplete="off">
     <datalist id="listMaquinas">${maqs.map(m=>`<option value="${esc(m)}">`).join('')}</datalist></div>
@@ -242,7 +255,7 @@ function pgContar(){
     return `<div class="card" style="padding:4px 12px">${rs.map(r=>`<div class="totrow" style="grid-template-columns:1fr auto auto">
       <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span> <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}${r.maquina?' · '+esc(r.maquina):''}</span></span>
       <b>${carr(r)>0?'+':''}${N(r.carretas)}</b>
-      <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>
+      <button class="del" data-del="${esc(r.id)}">✕</button></div>`).join('')}</div>
       ${todos.length>rs.length?`<div class="msg">Mostrando os ${rs.length} últimos de ${todos.length} lançamentos de hoje — o total acima considera todos.</div>`:''}`;})()}`;
 }
 
@@ -312,7 +325,7 @@ function pgRelatorio(){
       const rd=rs.filter(r=>r.data===dt);
       const a=somaReg(rd.filter(r=>r.origem==='arvore')), c=somaReg(rd.filter(r=>r.origem==='chao'));
       return `<div class="totrow" style="grid-template-columns:1fr auto auto auto auto"><span>${dBR(dt)}</span><b>${N(a)}</b><b>${N(c)}</b><b>${N(a+c)}</b>
-        <button class="del" data-delday="${dt}" title="Apagar o dia inteiro">✕</button></div>`;
+        <button class="del" data-delday="${esc(dt)}" title="Apagar o dia inteiro">✕</button></div>`;
     }).join('')||'<div class="empty">Sem registros no período.</div>'}
   </div>
   <h2>Lançamentos do período</h2>
@@ -325,7 +338,7 @@ function pgRelatorio(){
       <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span>
         <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}${r.maquina?' · '+esc(r.maquina):''}${r.operador?' · '+esc(r.operador):''}</span></span>
       <b>${carr(r)>0?'+':''}${N(r.carretas)}</b>
-      <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>
+      <button class="del" data-del="${esc(r.id)}">✕</button></div>`).join('')}</div>
       ${lista.length>mostra.length?`<div class="msg">Mostrando os ${mostra.length} últimos de ${lista.length} lançamentos do período.</div>`:''}`;
   })()}
   <div class="btnrow" style="margin-top:16px">
@@ -368,6 +381,7 @@ function enviarWhats(){
 }
 function exportCSV(){
   /* a planilha ignorava o filtro De/Até e vinha sempre com tudo, diferente do resumo do WhatsApp */
+  recarrega();
   const {de,ate}=periodo();
   const linhas=[['Data','Hora','Talhao','Origem','Passada','Carretas','Operador','Maquina']];
   noPeriodo(de,ate).sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(r=>
@@ -389,7 +403,7 @@ function pgTalhoes(){
     const tot=somaReg(db.registros.filter(r=>r.talhaoId===t.id));
     return `<div class="totrow" style="grid-template-columns:1fr auto auto">
       <span>${esc(t.nome)}</span><b>${N(tot)} carr.</b>
-      <button class="del" data-delt="${t.id}">✕</button></div>`;}).join('')}</div>`
+      <button class="del" data-delt="${esc(t.id)}">✕</button></div>`;}).join('')}</div>`
     :'<div class="empty">Nenhum talhão cadastrado.</div>'}`;
 }
 function addTalhao(){
@@ -444,6 +458,7 @@ function pgDados(){
 function salvarOp(){operador=(document.getElementById('opNome').value||'').trim();
   localStorage.setItem(OPKEY,operador);flash('Nome salvo');render();}
 function exportJSON(){
+  recarrega(); /* backup sai do que está gravado, não de uma cópia velha desta tela */
   const dump={app:'gefaz-conta',v:1,operador,exportadoEm:new Date().toISOString(),
     talhoes:db.talhoes,registros:db.registros};
   baixar(new Blob([JSON.stringify(dump)],{type:'application/json'}),
@@ -470,9 +485,10 @@ function importJSON(file){
         if(!c)return;                                  /* registro sem valor não entra na conta */
         if(db.registros.some(x=>x.id===id))return;     /* dedup por id */
         db.registros.push({...r,id,carretas:c,passada:PASS(r)===2?2:1,
+          data:DATA_OK.test(r.data)?r.data:(Number(r.ts)?dia(new Date(Number(r.ts))):today()),
           talhaoId:idMap[r.talhaoId]||r.talhaoId});novos++;
       });
-      corrigeNegativos();
+      corrigeNegativos();corrigeDatas();
     });
     render();
     const b=document.getElementById('impMsg');
@@ -539,11 +555,18 @@ document.getElementById('main').addEventListener('click',e=>{
       if(navigator.vibrate)navigator.vibrate(20);
       render();return;
     }
-    mexe(()=>{
-      if(!db.talhoes.find(t=>t.id===talhaoAtivo))talhaoAtivo=(db.talhoes[0]||{}).id||'';
+    const lancou=mexe(()=>{
+      /* se o talhão da tela sumiu (apagado no outro aparelho ou na outra aba), não escolhe outro
+         no lugar: a carreta ia parar em talhão errado e ninguém percebia */
+      if(!db.talhoes.find(t=>t.id===talhaoAtivo))return false;
       db.registros.push({id:uid(),data:hoje,talhaoId:talhaoAtivo,origem,
         carretas:q,passada:passadaAtiva,operador,maquina:maquinaAtiva,ts:Date.now()});
+      return true;
     });
+    if(!lancou){
+      talhaoAtivo=(db.talhoes[0]||{}).id||'';saveUI();
+      flash('Esse talhão não existe mais — confira o talhão');render();return;
+    }
     if(navigator.vibrate)navigator.vibrate(35);
     render();return;
   }
