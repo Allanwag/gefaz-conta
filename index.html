@@ -123,6 +123,7 @@
 
 <script>
 'use strict';
+const VERSAO='v11';
 const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
@@ -404,10 +405,18 @@ function pgDados(){
     <div class="totrow" style="grid-template-columns:1fr auto"><span>Registros</span><b>${nReg}</b></div>
     <div class="totrow" style="grid-template-columns:1fr auto"><span>Talhões</span><b>${db.talhoes.length}</b></div>
   </div>
+  <h2>Versão do app</h2>
+  <div class="card">
+    <div class="totrow" style="grid-template-columns:1fr auto"><span>Instalada neste aparelho</span><b>${VERSAO}</b></div>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn ghost" onclick="atualizarApp()">🔄 Buscar atualização</button>
+    </div>
+    <div class="msg">Só troca o programa pela versão mais nova — <b>a contagem não é apagada</b>.</div>
+  </div>
   <div class="btnrow" style="margin-top:12px">
     <button class="btn ghost" onclick="zerar()" style="color:var(--crit)">Zerar contagem (mantém talhões)</button>
   </div>
-  <div class="msg" style="margin-top:14px;text-align:center">Gefaz Conta · derivado do Gefaz360 · dados salvos neste aparelho</div>`;
+  <div class="msg" style="margin-top:14px;text-align:center">Gefaz Conta ${VERSAO} · derivado do Gefaz360 · dados salvos neste aparelho</div>`;
 }
 function salvarOp(){operador=(document.getElementById('opNome').value||'').trim();
   localStorage.setItem(OPKEY,operador);flash('Nome salvo');render();}
@@ -542,9 +551,27 @@ document.getElementById('main').addEventListener('input',e=>{
 /* app aberto no atalho e no navegador ao mesmo tempo: mantém as duas telas com a mesma contagem */
 window.addEventListener('storage',e=>{if(e.key===LS){recarrega();render();}});
 
-/* PWA */
+/* PWA — quando uma versão nova assume, a tela recarrega sozinha (a contagem fica salva) */
 if('serviceWorker' in navigator){
-  try{navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
+  try{
+    navigator.serviceWorker.register('sw.js').then(reg=>{if(reg&&reg.update)reg.update();}).catch(()=>{});
+    let recarregando=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(recarregando)return;recarregando=true;location.reload();
+    });
+  }catch(e){}
+}
+/* botão "Buscar atualização": limpa só o cache do programa e recarrega — não mexe nos lançamentos */
+function atualizarApp(){
+  flash('Buscando atualização…');
+  const fim=()=>setTimeout(()=>location.reload(),500);
+  Promise.resolve()
+    .then(()=>(self.caches&&caches.keys)?caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k)))):null)
+    .catch(()=>{})
+    .then(()=>('serviceWorker' in navigator&&navigator.serviceWorker.getRegistration)
+      ?navigator.serviceWorker.getRegistration().then(r=>r&&r.update&&r.update()).catch(()=>{}):null)
+    .catch(()=>{})
+    .then(fim,fim);
 }
 
 render();
