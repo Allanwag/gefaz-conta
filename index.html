@@ -123,7 +123,7 @@
 
 <script>
 'use strict';
-const VERSAO='v12';
+const VERSAO='v13';
 const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
@@ -307,11 +307,12 @@ function pgRelatorio(){
   </div>`:''}
   <h2>Por dia</h2>
   <div class="card" style="padding:4px 12px">
-    <div class="totrow head"><span>Dia</span><span>Árv.</span><span>Chão</span><span>Total</span></div>
+    <div class="totrow head" style="grid-template-columns:1fr auto auto auto auto"><span>Dia</span><span>Árv.</span><span>Chão</span><span>Total</span><span></span></div>
     ${[...new Set(rs.map(r=>r.data))].sort().reverse().map(dt=>{
       const rd=rs.filter(r=>r.data===dt);
       const a=somaReg(rd.filter(r=>r.origem==='arvore')), c=somaReg(rd.filter(r=>r.origem==='chao'));
-      return `<div class="totrow"><span>${dBR(dt)}</span><b>${N(a)}</b><b>${N(c)}</b><b>${N(a+c)}</b></div>`;
+      return `<div class="totrow" style="grid-template-columns:1fr auto auto auto auto"><span>${dBR(dt)}</span><b>${N(a)}</b><b>${N(c)}</b><b>${N(a+c)}</b>
+        <button class="del" data-delday="${dt}" title="Apagar o dia inteiro">✕</button></div>`;
     }).join('')||'<div class="empty">Sem registros no período.</div>'}
   </div>
   <h2>Lançamentos do período</h2>
@@ -548,6 +549,13 @@ document.getElementById('main').addEventListener('click',e=>{
   }
   const pass=e.target.closest('[data-pass]');
   if(pass){passadaAtiva=+pass.dataset.pass;saveUI();render();return;}
+  /* apagar um dia inteiro de uma vez — limpar carreta por carreta um dia errado era inviável */
+  const delday=e.target.closest('[data-delday]');
+  if(delday){const dt=delday.dataset.delday;
+    const rd=db.registros.filter(r=>r.data===dt);
+    if(!confirm('Apagar os '+rd.length+' lançamento(s) de '+dBR(dt)+' ('+N(somaReg(rd))+' carretas)?\nOs outros dias não são tocados.'))return;
+    mexe(()=>{db.registros=db.registros.filter(r=>r.data!==dt);});
+    flash('Lançamentos de '+dBR(dt)+' apagados');render();return;}
   const del=e.target.closest('[data-del]');
   if(del){mexe(()=>{db.registros=db.registros.filter(r=>r.id!==del.dataset.del);});render();return;}
   const delt=e.target.closest('[data-delt]');
