@@ -123,37 +123,49 @@
 
 <script>
 'use strict';
-const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador';
+const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const dBR=s=>{if(!s)return'';const[y,m,d]=s.split('-');return d+'/'+m+'/'+y.slice(2);};
 const hBR=ts=>{if(!ts)return'';const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
-const N=(v,dc=1)=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:dc,maximumFractionDigits:dc});
+const N=(v,dc=1)=>(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:dc,maximumFractionDigits:dc});
+const arred=v=>Math.round((Number(v)||0)*100)/100;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-function seed(){
-  return {talhoes:[
-    {id:uid(),nome:'Velho'},{id:uid(),nome:'Larga'},{id:uid(),nome:'Cantinho'},
-    {id:uid(),nome:'144 Gordura'},{id:uid(),nome:'Topázio Ruziziensis'},
-    {id:uid(),nome:'Topázio Rocinha'},{id:uid(),nome:'144 Rocinha'}
-  ],registros:[]};
-}
-let db, operador=localStorage.getItem(OPKEY)||'';
-try{db=JSON.parse(localStorage.getItem(LS))||seed();}catch(e){db=seed();}
-if(!db.talhoes)db.talhoes=[];if(!db.registros)db.registros=[];
-const save=()=>{try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){}};
-(function garanteTalhoesPadrao(){
-  const padrao=['Velho','Larga','Cantinho','144 Gordura','Topázio Ruziziensis','Topázio Rocinha','144 Rocinha'];
-  let mudou=false;
-  padrao.forEach(nome=>{
-    if(!db.talhoes.find(t=>t.nome.toLowerCase()===nome.toLowerCase())){
-      db.talhoes.push({id:uid(),nome});mudou=true;
+const PADRAO=['Velho','Larga','Cantinho','144 Gordura','Topázio Ruziziensis','Topázio Rocinha','144 Rocinha'];
+function seed(){return {talhoes:PADRAO.map(nome=>({id:uid(),nome})),registros:[],padraoAplicado:true};}
+function carrega(){
+  try{const d=JSON.parse(localStorage.getItem(LS));
+    if(d&&typeof d==='object'){
+      if(!Array.isArray(d.talhoes))d.talhoes=[];
+      if(!Array.isArray(d.registros))d.registros=[];
+      return d;
     }
+  }catch(e){}
+  return null;
+}
+let db=carrega()||seed(), operador=localStorage.getItem(OPKEY)||'';
+const save=()=>{try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){flash('Sem espaço para salvar neste aparelho');}};
+/* relê o que está gravado antes de mexer: o app costuma ficar aberto no atalho E na aba do navegador
+   ao mesmo tempo; a cópia velha da memória sobrescrevia a outra e ressuscitava carretas já apagadas */
+function recarrega(){const d=carrega();if(d)db=d;}
+function mexe(fn){recarrega();const r=fn();save();return r;}
+/* talhões padrão só na primeira abertura — antes voltavam sozinhos toda vez que o app abria */
+(function aplicaPadrao(){
+  if(db.padraoAplicado)return;
+  PADRAO.forEach(nome=>{
+    if(!db.talhoes.find(t=>String(t.nome).toLowerCase()===nome.toLowerCase()))db.talhoes.push({id:uid(),nome});
   });
-  if(mudou)save();
+  db.padraoAplicado=true;save();
 })();
 
-let tab='contar', talhaoAtivo=(db.talhoes[0]||{}).id||'', passadaAtiva=1, maquinaAtiva='';
+let tab='contar', talhaoAtivo='', passadaAtiva=1, maquinaAtiva='';
+/* talhão, passada e máquina ficam gravados: ao reabrir o app voltava sempre no 1º talhão e sem máquina,
+   e as carretas seguintes eram lançadas no talhão errado sem ninguém perceber */
+try{const ui=JSON.parse(localStorage.getItem(UIKEY))||{};
+  talhaoAtivo=ui.talhao||'';passadaAtiva=ui.passada===2?2:1;maquinaAtiva=ui.maquina||'';}catch(e){}
+const saveUI=()=>{try{localStorage.setItem(UIKEY,JSON.stringify({talhao:talhaoAtivo,passada:passadaAtiva,maquina:maquinaAtiva}));}catch(e){}};
+if(!db.talhoes.find(t=>t.id===talhaoAtivo))talhaoAtivo=(db.talhoes[0]||{}).id||'';
 const PASS=r=>r.passada||1;
 const passLbl=p=>p===2?'2ª passada':'1ª passada';
 
@@ -161,8 +173,28 @@ function flash(t){const f=document.getElementById('flash');f.textContent=t;f.cla
   clearTimeout(f._t);f._t=setTimeout(()=>f.classList.remove('on'),1400);}
 
 /* soma helpers */
-const somaReg=arr=>arr.reduce((a,r)=>a+r.carretas,0);
+const carr=r=>Number(r.carretas)||0;
+const somaReg=arr=>arred(arr.reduce((a,r)=>a+carr(r),0));
 const talNome=id=>(db.talhoes.find(t=>t.id===id)||{nome:'—'}).nome;
+/* conserta contagem que ficou negativa na versão antiga do botão − (ex.: 0,5 − 1 = −0,5).
+   roda na abertura e depois de importar, inclusive dados vindos de aparelho ainda desatualizado */
+function corrigeNegativos(){
+  const grupos={};
+  db.registros.forEach(r=>{const k=[r.data,r.talhaoId,r.origem,PASS(r)].join('|');(grupos[k]=grupos[k]||[]).push(r);});
+  let mudou=false;
+  Object.keys(grupos).forEach(k=>{
+    let falta=arred(-somaReg(grupos[k]));
+    if(falta<=0)return;
+    grupos[k].filter(r=>carr(r)<0).sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(r=>{
+      if(falta<=0)return;
+      const usa=Math.min(-carr(r),falta);
+      r.carretas=arred(carr(r)+usa);falta=arred(falta-usa);mudou=true;
+    });
+  });
+  if(mudou)db.registros=db.registros.filter(r=>carr(r)!==0);
+  return mudou;
+}
+if(corrigeNegativos())save();
 
 /* ---------- CONTAR ---------- */
 function vCounter(origem,cls,nome){
@@ -203,33 +235,45 @@ function pgContar(){
   </div>
   <div class="daytot"><span class="k">Total do talhão hoje (${dBR(hoje)})<br><span style="font-size:11px">1ª ${N(somaReg(db.registros.filter(r=>r.data===hoje&&r.talhaoId===talhaoAtivo&&PASS(r)===1)))} · 2ª ${N(somaReg(db.registros.filter(r=>r.data===hoje&&r.talhaoId===talhaoAtivo&&PASS(r)===2)))}</span></span><span class="v">${N(totDia)}</span></div>
   <h2>Lançamentos de hoje</h2>
-  ${(()=>{const rs=db.registros.filter(r=>r.data===hoje).sort((a,b)=>b.ts-a.ts).slice(0,20);
+  ${(()=>{const todos=db.registros.filter(r=>r.data===hoje).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const rs=todos.slice(0,20);
     if(!rs.length)return '<div class="empty">Nenhuma carreta lançada hoje ainda.</div>';
     return `<div class="card" style="padding:4px 12px">${rs.map(r=>`<div class="totrow" style="grid-template-columns:1fr auto auto">
       <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span> <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}${r.maquina?' · '+esc(r.maquina):''}</span></span>
-      <b>${r.carretas>0?'+':''}${N(r.carretas)}</b>
-      <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>`;})()}`;
+      <b>${carr(r)>0?'+':''}${N(r.carretas)}</b>
+      <button class="del" data-del="${r.id}">✕</button></div>`).join('')}</div>
+      ${todos.length>rs.length?`<div class="msg">Mostrando os ${rs.length} últimos de ${todos.length} lançamentos de hoje — o total acima considera todos.</div>`:''}`;})()}`;
 }
 
 /* ---------- RELATÓRIO ---------- */
 let repDe='', repAte='';
-function pgRelatorio(){
+/* período usado pela tela, pelo resumo do WhatsApp e pelo CSV — antes cada um usava um critério */
+function periodo(){
   const datas=[...new Set(db.registros.map(r=>r.data))].sort();
-  const de=repDe||datas[0]||today(), ate=repAte||datas[datas.length-1]||today();
-  const rs=db.registros.filter(r=>r.data>=de&&r.data<=ate);
+  return {de:repDe||datas[0]||today(), ate:repAte||datas[datas.length-1]||today()};
+}
+const noPeriodo=(de,ate)=>db.registros.filter(r=>r.data>=de&&r.data<=ate);
+function pgRelatorio(){
+  const {de,ate}=periodo();
+  const rs=noPeriodo(de,ate);
   const porTal={};
   db.talhoes.forEach(t=>porTal[t.id]={arv:0,cha:0});
   rs.forEach(r=>{if(!porTal[r.talhaoId])porTal[r.talhaoId]={arv:0,cha:0};
-    porTal[r.talhaoId][r.origem==='arvore'?'arv':'cha']+=r.carretas;});
-  const totArv=rs.filter(r=>r.origem==='arvore').reduce((a,r)=>a+r.carretas,0);
-  const totCha=rs.filter(r=>r.origem==='chao').reduce((a,r)=>a+r.carretas,0);
+    porTal[r.talhaoId][r.origem==='arvore'?'arv':'cha']+=carr(r);});
+  const totArv=somaReg(rs.filter(r=>r.origem==='arvore'));
+  const totCha=somaReg(rs.filter(r=>r.origem==='chao'));
   const ops=[...new Set(rs.map(r=>r.operador||'—'))];
   const maqsRep=[...new Set(rs.map(r=>r.maquina).filter(Boolean))].sort();
+  const semMaq=somaReg(rs.filter(r=>!r.maquina));
+  /* lançamentos de talhão já excluído continuavam no total geral mas não apareciam em nenhuma linha */
+  const orfaos=Object.keys(porTal).filter(id=>!db.talhoes.find(t=>t.id===id))
+    .reduce((s,id)=>({arv:s.arv+porTal[id].arv,cha:s.cha+porTal[id].cha}),{arv:0,cha:0});
   return `
   <div class="row" style="gap:8px">
     <div class="field" style="flex:1"><label>De</label><input type="date" id="repDe" value="${de}"></div>
     <div class="field" style="flex:1"><label>Até</label><input type="date" id="repAte" value="${ate}"></div>
   </div>
+  ${de>ate?'<div class="msg">A data inicial está depois da final — o período está vazio.</div>':''}
   <div class="counters">
     <div class="counter arv"><span class="nome">Árvore</span><div><div class="tot">${N(totArv)}</div><div class="un">carretas no período</div></div></div>
     <div class="counter cha"><span class="nome">Chão</span><div><div class="tot">${N(totCha)}</div><div class="un">carretas no período</div></div></div>
@@ -239,24 +283,26 @@ function pgRelatorio(){
   <div class="card" style="padding:4px 12px">
     <div class="totrow head"><span>Passada</span><span>Árv.</span><span>Chão</span><span>Total</span></div>
     ${[1,2].map(pp=>{const rp=rs.filter(r=>PASS(r)===pp);
-      const a=rp.filter(r=>r.origem==='arvore').reduce((s,r)=>s+r.carretas,0);
-      const c=rp.filter(r=>r.origem==='chao').reduce((s,r)=>s+r.carretas,0);
+      const a=somaReg(rp.filter(r=>r.origem==='arvore'));
+      const c=somaReg(rp.filter(r=>r.origem==='chao'));
       return `<div class="totrow"><span>${pp}ª passada</span><b>${N(a)}</b><b>${N(c)}</b><b>${N(a+c)}</b></div>`;}).join('')}
   </div>
   <h2>Por talhão</h2>
   <div class="card" style="padding:4px 12px">
     <div class="totrow head"><span>Talhão</span><span>Árv.</span><span>Chão</span><span>Total</span></div>
-    ${db.talhoes.map(t=>{const x=porTal[t.id]||{arv:0,cha:0};if(!x.arv&&!x.cha)return'';
+    ${(db.talhoes.map(t=>{const x=porTal[t.id]||{arv:0,cha:0};if(!x.arv&&!x.cha)return'';
       return `<div class="totrow"><span>${esc(t.nome)}</span><b>${N(x.arv)}</b><b>${N(x.cha)}</b><b>${N(x.arv+x.cha)}</b></div>`;}).join('')
+      +(orfaos.arv||orfaos.cha?`<div class="totrow"><span>Talhão excluído</span><b>${N(orfaos.arv)}</b><b>${N(orfaos.cha)}</b><b>${N(orfaos.arv+orfaos.cha)}</b></div>`:''))
       ||'<div class="empty">Sem registros no período.</div>'}
   </div>
   ${ops.length>1?`<h2>Por operador</h2><div class="card" style="padding:4px 12px">
-    ${ops.map(o=>{const v=rs.filter(r=>(r.operador||'—')===o).reduce((a,r)=>a+r.carretas,0);
+    ${ops.map(o=>{const v=somaReg(rs.filter(r=>(r.operador||'—')===o));
       return `<div class="totrow" style="grid-template-columns:1fr auto"><span>${esc(o)}</span><b>${N(v)}</b></div>`;}).join('')}
   </div>`:''}
   ${maqsRep.length?`<h2>Por máquina</h2><div class="card" style="padding:4px 12px">
-    ${maqsRep.map(m=>{const v=rs.filter(r=>(r.maquina||'')===m).reduce((a,r)=>a+r.carretas,0);
+    ${maqsRep.map(m=>{const v=somaReg(rs.filter(r=>(r.maquina||'')===m));
       return `<div class="totrow" style="grid-template-columns:1fr auto"><span>${esc(m)}</span><b>${N(v)}</b></div>`;}).join('')}
+    ${semMaq?`<div class="totrow" style="grid-template-columns:1fr auto"><span>Sem máquina anotada</span><b>${N(semMaq)}</b></div>`:''}
   </div>`:''}
   <div class="btnrow" style="margin-top:16px">
     <button class="btn" onclick="enviarWhats()">📲 Enviar resumo pelo WhatsApp</button>
@@ -264,25 +310,28 @@ function pgRelatorio(){
   </div>`;
 }
 function resumoTexto(){
-  const datas=[...new Set(db.registros.map(r=>r.data))].sort();
-  const de=repDe||datas[0]||today(), ate=repAte||datas[datas.length-1]||today();
-  const rs=db.registros.filter(r=>r.data>=de&&r.data<=ate);
-  const totArv=rs.filter(r=>r.origem==='arvore').reduce((a,r)=>a+r.carretas,0);
-  const totCha=rs.filter(r=>r.origem==='chao').reduce((a,r)=>a+r.carretas,0);
+  const {de,ate}=periodo();
+  const rs=noPeriodo(de,ate);
+  const totArv=somaReg(rs.filter(r=>r.origem==='arvore'));
+  const totCha=somaReg(rs.filter(r=>r.origem==='chao'));
   let t=`Gefaz Conta — Carretas de café\n${dBR(de)} a ${dBR(ate)}\nOperador: ${operador||'—'}\n\n`;
   db.talhoes.forEach(tl=>{
-    const a=rs.filter(r=>r.talhaoId===tl.id&&r.origem==='arvore').reduce((s,r)=>s+r.carretas,0);
-    const c=rs.filter(r=>r.talhaoId===tl.id&&r.origem==='chao').reduce((s,r)=>s+r.carretas,0);
+    const a=somaReg(rs.filter(r=>r.talhaoId===tl.id&&r.origem==='arvore'));
+    const c=somaReg(rs.filter(r=>r.talhaoId===tl.id&&r.origem==='chao'));
     if(a||c)t+=`${tl.nome}: Árvore ${N(a)} · Chão ${N(c)} = ${N(a+c)}\n`;
   });
-  const p1=rs.filter(r=>PASS(r)===1).reduce((s,r)=>s+r.carretas,0);
-  const p2=rs.filter(r=>PASS(r)===2).reduce((s,r)=>s+r.carretas,0);
+  /* sem esta linha as carretas de talhão excluído entravam só no TOTAL e a conta não fechava */
+  const orf=somaReg(rs.filter(r=>!db.talhoes.find(t=>t.id===r.talhaoId)));
+  if(orf)t+=`Talhão excluído: ${N(orf)}\n`;
+  const p1=somaReg(rs.filter(r=>PASS(r)===1));
+  const p2=somaReg(rs.filter(r=>PASS(r)===2));
   t+=`\nPor passada: 1ª ${N(p1)} · 2ª ${N(p2)}`;
   const maqsTxt=[...new Set(rs.map(r=>r.maquina).filter(Boolean))].sort();
   if(maqsTxt.length){
     t+=`\n\nPor máquina:\n`;
-    maqsTxt.forEach(m=>{const v=rs.filter(r=>(r.maquina||'')===m).reduce((s,r)=>s+r.carretas,0);
-      t+=`${m}: ${N(v)}\n`;});
+    maqsTxt.forEach(m=>{t+=`${m}: ${N(somaReg(rs.filter(r=>(r.maquina||'')===m)))}\n`;});
+    const semMaq=somaReg(rs.filter(r=>!r.maquina));
+    if(semMaq)t+=`Sem máquina anotada: ${N(semMaq)}\n`;
     t=t.replace(/\n$/,'');
   }
   t+=`\nTOTAL: Árvore ${N(totArv)} + Chão ${N(totCha)} = ${N(totArv+totCha)} carretas`;
@@ -294,11 +343,13 @@ function enviarWhats(){
   else{window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank');}
 }
 function exportCSV(){
+  /* a planilha ignorava o filtro De/Até e vinha sempre com tudo, diferente do resumo do WhatsApp */
+  const {de,ate}=periodo();
   const linhas=[['Data','Hora','Talhao','Origem','Passada','Carretas','Operador','Maquina']];
-  db.registros.slice().sort((a,b)=>a.ts-b.ts).forEach(r=>
-    linhas.push([r.data,hBR(r.ts),talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',PASS(r)+'a',String(r.carretas).replace('.',','),r.operador||'',r.maquina||'']));
+  noPeriodo(de,ate).sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(r=>
+    linhas.push([r.data,hBR(r.ts),talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',PASS(r)+'a',String(carr(r)).replace('.',','),r.operador||'',r.maquina||'']));
   const csv='﻿'+linhas.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
-  baixar(new Blob([csv],{type:'text/csv'}),'gefaz-conta-'+today()+'.csv');
+  baixar(new Blob([csv],{type:'text/csv'}),'gefaz-conta-'+de+'_a_'+ate+'.csv');
 }
 
 /* ---------- TALHÕES ---------- */
@@ -320,8 +371,10 @@ function pgTalhoes(){
 function addTalhao(){
   const el=document.getElementById('novoTal'),nome=(el.value||'').trim();
   if(!nome){el.focus();return;}
-  db.talhoes.push({id:uid(),nome});save();
-  if(!talhaoAtivo)talhaoAtivo=db.talhoes[db.talhoes.length-1].id;
+  /* nome repetido dividia a contagem do mesmo talhão em duas linhas do relatório */
+  if(db.talhoes.find(t=>String(t.nome).toLowerCase()===nome.toLowerCase())){flash('Esse talhão já existe');el.select();return;}
+  mexe(()=>{db.talhoes.push({id:uid(),nome});});
+  if(!talhaoAtivo){talhaoAtivo=db.talhoes[db.talhoes.length-1].id;saveUI();}
   flash('Talhão cadastrado');render();
 }
 
@@ -369,19 +422,27 @@ function importJSON(file){
   file.text().then(t=>{
     const d=JSON.parse(t);
     if(d.app!=='gefaz-conta'||!Array.isArray(d.registros))throw 0;
-    /* junta talhões por nome (evita duplicar), mapeia ids */
-    const idMap={};
-    (d.talhoes||[]).forEach(t=>{
-      let ex=db.talhoes.find(x=>x.nome.toLowerCase()===t.nome.toLowerCase());
-      if(!ex){ex={id:uid(),nome:t.nome};db.talhoes.push(ex);}
-      idMap[t.id]=ex.id;
-    });
     let novos=0;
-    (d.registros||[]).forEach(r=>{
-      if(db.registros.some(x=>x.id===r.id))return; /* dedup por id */
-      db.registros.push({...r,talhaoId:idMap[r.talhaoId]||r.talhaoId});novos++;
+    mexe(()=>{
+      /* junta talhões por nome (evita duplicar), mapeia ids */
+      const idMap={};
+      (d.talhoes||[]).forEach(t=>{
+        if(!t||!t.nome)return;
+        let ex=db.talhoes.find(x=>String(x.nome).toLowerCase()===String(t.nome).toLowerCase());
+        if(!ex){ex={id:uid(),nome:t.nome};db.talhoes.push(ex);}
+        idMap[t.id]=ex.id;
+      });
+      (d.registros||[]).forEach(r=>{
+        if(!r)return;
+        const id=r.id||uid(), c=arred(r.carretas);
+        if(!c)return;                                  /* registro sem valor não entra na conta */
+        if(db.registros.some(x=>x.id===id))return;     /* dedup por id */
+        db.registros.push({...r,id,carretas:c,passada:PASS(r)===2?2:1,
+          talhaoId:idMap[r.talhaoId]||r.talhaoId});novos++;
+      });
+      corrigeNegativos();
     });
-    save();render();
+    render();
     const b=document.getElementById('impMsg');
     if(b){b.classList.remove('hide');b.textContent=`Importado de ${d.operador||'operador'}: ${novos} registro(s) novo(s) somado(s).`;}
     flash(novos+' registros somados');
@@ -389,7 +450,7 @@ function importJSON(file){
 }
 function zerar(){
   if(!confirm('Apagar TODAS as carretas lançadas neste aparelho? Os talhões são mantidos.'))return;
-  db.registros=[];save();flash('Contagem zerada');render();
+  mexe(()=>{db.registros=[];});flash('Contagem zerada');render();
 }
 function baixar(blob,nome){const u=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=u;a.download=nome;a.click();setTimeout(()=>URL.revokeObjectURL(u),2000);}
@@ -426,37 +487,60 @@ document.getElementById('opChip').addEventListener('click',()=>{tab='dados';rend
 document.getElementById('main').addEventListener('click',e=>{
   const add=e.target.closest('[data-add]');
   if(add){
-    const q=parseFloat(add.dataset.q);
-    const hoje=today();
-    if(q<0){ /* -1: remove do total de hoje desse talhão/origem/passada, sem ir negativo */
-      const atual=somaReg(db.registros.filter(r=>r.origem===add.dataset.add&&r.talhaoId===talhaoAtivo&&r.data===hoje&&PASS(r)===passadaAtiva));
-      if(atual<=0){flash('Nada para remover');return;}
+    const q=parseFloat(add.dataset.q), origem=add.dataset.add, hoje=today();
+    if(q<0){
+      /* − abate dos lançamentos mais recentes do mesmo talhão/origem/passada de hoje.
+         antes gravava uma carreta negativa e o total podia ficar abaixo de zero (0,5 − 1 = −0,5) */
+      const ok=mexe(()=>{
+        const grupo=db.registros.filter(r=>r.origem===origem&&r.talhaoId===talhaoAtivo&&r.data===hoje&&PASS(r)===passadaAtiva);
+        let falta=Math.min(-q,somaReg(grupo));
+        if(falta<=0)return false;
+        grupo.filter(r=>carr(r)>0).sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(r=>{
+          if(falta<=0)return;
+          const usa=Math.min(carr(r),falta);
+          r.carretas=arred(carr(r)-usa);falta=arred(falta-usa);
+        });
+        db.registros=db.registros.filter(r=>carr(r)!==0);
+        return true;
+      });
+      if(!ok){flash('Nada para remover');return;}
+      if(navigator.vibrate)navigator.vibrate(20);
+      render();return;
     }
-    db.registros.push({id:uid(),data:hoje,talhaoId:talhaoAtivo,origem:add.dataset.add,
-      carretas:q,passada:passadaAtiva,operador,maquina:maquinaAtiva,ts:Date.now()});
-    save();
-    if(navigator.vibrate)navigator.vibrate(q<0?20:35);
+    mexe(()=>{
+      if(!db.talhoes.find(t=>t.id===talhaoAtivo))talhaoAtivo=(db.talhoes[0]||{}).id||'';
+      db.registros.push({id:uid(),data:hoje,talhaoId:talhaoAtivo,origem,
+        carretas:q,passada:passadaAtiva,operador,maquina:maquinaAtiva,ts:Date.now()});
+    });
+    if(navigator.vibrate)navigator.vibrate(35);
     render();return;
   }
   const pass=e.target.closest('[data-pass]');
-  if(pass){passadaAtiva=+pass.dataset.pass;render();return;}
+  if(pass){passadaAtiva=+pass.dataset.pass;saveUI();render();return;}
   const del=e.target.closest('[data-del]');
-  if(del){db.registros=db.registros.filter(r=>r.id!==del.dataset.del);save();render();return;}
+  if(del){mexe(()=>{db.registros=db.registros.filter(r=>r.id!==del.dataset.del);});render();return;}
   const delt=e.target.closest('[data-delt]');
   if(delt){const id=delt.dataset.delt;
     const n=db.registros.filter(r=>r.talhaoId===id).length;
     if(n&&!confirm('Este talhão tem '+n+' lançamento(s). Excluir mesmo assim?'))return;
-    db.talhoes=db.talhoes.filter(t=>t.id!==id);
-    db.registros=db.registros.filter(r=>r.talhaoId!==id);
-    if(talhaoAtivo===id)talhaoAtivo=(db.talhoes[0]||{}).id||'';
-    save();flash('Talhão excluído');render();return;}
+    mexe(()=>{
+      db.talhoes=db.talhoes.filter(t=>t.id!==id);
+      db.registros=db.registros.filter(r=>r.talhaoId!==id);
+    });
+    if(talhaoAtivo===id){talhaoAtivo=(db.talhoes[0]||{}).id||'';saveUI();}
+    flash('Talhão excluído');render();return;}
 });
 document.getElementById('main').addEventListener('change',e=>{
-  if(e.target.id==='selTal'){talhaoAtivo=e.target.value;render();}
-  else if(e.target.id==='inpMaquina'){maquinaAtiva=e.target.value.trim();}
+  if(e.target.id==='selTal'){talhaoAtivo=e.target.value;saveUI();render();}
   else if(e.target.id==='repDe'){repDe=e.target.value;render();}
   else if(e.target.id==='repAte'){repAte=e.target.value;render();}
 });
+/* máquina grava a cada tecla: no 'change' o nome se perdia se a tela fosse redesenhada antes do campo sair do foco */
+document.getElementById('main').addEventListener('input',e=>{
+  if(e.target.id==='inpMaquina'){maquinaAtiva=e.target.value.trim();saveUI();}
+});
+/* app aberto no atalho e no navegador ao mesmo tempo: mantém as duas telas com a mesma contagem */
+window.addEventListener('storage',e=>{if(e.key===LS){recarrega();render();}});
 
 /* PWA */
 if('serviceWorker' in navigator){
