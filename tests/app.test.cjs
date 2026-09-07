@@ -15,6 +15,24 @@ function app(){
 }
 const backup=(records,extra={})=>({app:'gefaz-conta',v:1,talhoes:[{id:'tal',nome:'Velho'}],registros:records,...extra});
 const record=(extra={})=>({id:'r1',talhaoId:'tal',origem:'arvore',carretas:1,data:'2026-09-07',passada:1,...extra});
+const textReport=`Gefaz Conta — Carretas de café
+30/07/26 a 11/08/26
+Operador: Jean
+
+Velho: Árvore 11,0 · Chão 0,0 = 11,0
+144 Gordura: Árvore 12,0 · Chão 0,0 = 12,0
+Topázio Ruziziensis: Árvore 5,5 · Chão 0,0 = 5,5
+Topázio Rocinha: Árvore 3,0 · Chão 0,0 = 3,0
+144 Rocinha: Árvore 1,0 · Chão 0,0 = 1,0
+
+Por passada: 1ª 32,5 · 2ª 0,0
+
+Por máquina:
+Colhedeira Adriano: 23,0
+Cristiano: 2,0
+Jacto Cristiano: 6,5
+Sem máquina anotada: 1,0
+TOTAL: Árvore 32,5 + Chão 0,0 = 32,5 carretas`;
 test('repeat imports preserve totals and stable IDs',()=>{
   const {run}=app();const d=JSON.stringify(backup([record()]));
   run(`juntaBackup(${d});juntaBackup(${d})`);
@@ -71,4 +89,27 @@ test('operator report contains only the selected period and remains idempotent',
   assert.deepEqual(parsed.registros.map(r=>r.id),['today']);
   const target=app();target.run(`juntaBackup(${report});juntaBackup(${report})`);
   assert.equal(target.run('db.registros.length'),1);assert.equal(target.run('somaReg(db.registros)'),1);
+});
+test('pasted WhatsApp summary preserves every reported marginal total',()=>{
+  const {run}=app();run(`var parsed=parseRelatorioTexto(${JSON.stringify(textReport)});aplicaRelatorioTexto(parsed)`);
+  assert.equal(run('somaReg(db.registros)'),32.5);
+  assert.equal(run("somaReg(db.registros.filter(r=>r.operador==='Jean'))"),32.5);
+  assert.equal(run("somaReg(db.registros.filter(r=>PASS(r)===1))"),32.5);
+  assert.equal(run("somaReg(db.registros.filter(r=>r.maquina==='Colhedeira Adriano'))"),23);
+  assert.equal(run("somaReg(db.registros.filter(r=>talNome(r.talhaoId)==='Topázio Ruziziensis'))"),5.5);
+  assert.equal(run("new Set(db.registros.map(r=>r.data)).size"),1);
+  assert.equal(run("db.registros[0].data"),'2026-08-11');
+});
+test('same operator and period replaces the previous pasted summary without duplication',()=>{
+  const {run}=app();run(`var first=parseRelatorioTexto(${JSON.stringify(textReport)});aplicaRelatorioTexto(first);aplicaRelatorioTexto(first)`);
+  assert.equal(run('somaReg(db.registros)'),32.5);
+  const revised=textReport.replace(/11,0/g,'10,0').replace(/32,5/g,'31,5').replace('23,0','22,0');
+  run(`var revised=parseRelatorioTexto(${JSON.stringify(revised)});aplicaRelatorioTexto(revised)`);
+  assert.equal(run('somaReg(db.registros)'),31.5);
+});
+test('pasted summary is rejected atomically when totals do not close',()=>{
+  const {run}=app(),before=run('JSON.stringify(db)');
+  const bad=textReport.replace('TOTAL: Árvore 32,5','TOTAL: Árvore 99,0');
+  assert.throws(()=>run(`aplicaRelatorioTexto(parseRelatorioTexto(${JSON.stringify(bad)}))`));
+  assert.equal(run('JSON.stringify(db)'),before);
 });

@@ -38,9 +38,10 @@
   h2{font-size:15px;font-weight:700;margin:18px 2px 8px;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em}
   .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
   .field label{font-size:12.5px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em}
-  select,input{font:inherit;font-size:17px;color:var(--ink);background:var(--surface);
+  select,input,textarea{font:inherit;font-size:17px;color:var(--ink);background:var(--surface);
     border:1.5px solid var(--line);border-radius:12px;padding:12px 12px;width:100%}
-  select:focus,input:focus,button:focus-visible{outline:3px solid var(--cafe);outline-offset:1px}
+  textarea{min-height:190px;resize:vertical;font-size:14px;line-height:1.45}
+  select:focus,input:focus,textarea:focus,button:focus-visible{outline:3px solid var(--cafe);outline-offset:1px}
   .seg{display:flex;gap:6px;background:var(--surface2);border:1.5px solid var(--line);border-radius:12px;padding:4px}
   .seg button{flex:1;border:0;background:none;font:inherit;font-weight:800;font-size:15px;padding:12px 0;
     border-radius:9px;color:var(--ink2);cursor:pointer}
@@ -123,7 +124,7 @@
 
 <script>
 'use strict';
-const VERSAO='v16';
+const VERSAO='v17';
 const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const dia=(d=new Date())=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -355,7 +356,7 @@ function pgRelatorio(){
     if(!mostra.length)return '<div class="empty">Sem registros no período.</div>';
     return `<div class="card" style="padding:4px 12px">${mostra.map(r=>`<div class="totrow" style="grid-template-columns:1fr auto auto">
       <span>${esc(talNome(r.talhaoId))} · <span class="pill ${r.origem==='arvore'?'arv':'cha'}">${r.origem==='arvore'?'árvore':'chão'}</span>
-        <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}${r.maquina?' · '+esc(r.maquina):''}${r.operador?' · '+esc(r.operador):''}</span></span>
+        <span style="color:var(--ink2);font-size:12px">${PASS(r)}ª · ${dBR(r.data)} ${hBR(r.ts)}${r.maquina?' · '+esc(r.maquina):''}${r.operador?' · '+esc(r.operador):''}${r.relatorioChave?' · consolidado':''}</span></span>
       <b>${carr(r)>0?'+':''}${N(r.carretas)}</b>
       <button class="del" data-del="${esc(r.id)}">✕</button></div>`).join('')}</div>
       ${lista.length>mostra.length?`<div class="msg">Mostrando os ${mostra.length} últimos de ${lista.length} lançamentos do período.</div>`:''}`;
@@ -366,6 +367,12 @@ function pgRelatorio(){
   </div>
   <h2>Atualizar a contagem</h2>
   <div class="card">
+    <div class="field"><label>Cole aqui o relatório recebido</label>
+      <textarea id="relTexto" placeholder="Gefaz Conta — Carretas de café&#10;30/07/26 a 11/08/26&#10;Operador: Jean&#10;&#10;Velho: Árvore 11,0 · Chão 0,0 = 11,0&#10;..."></textarea></div>
+    <button class="btn" onclick="importarRelatorioTexto()">📋 Atualizar com relatório copiado</button>
+    <div class="msg">O app confere se os totais fecham antes de atualizar. Um novo texto do mesmo operador e período substitui a importação textual anterior. Como o resumo não cruza máquina, talhão e dia, os lançamentos aparecem identificados como “consolidado”.</div>
+    <div id="impTextoMsg" class="msg hide"></div>
+    <div class="msg" style="margin-top:14px">Você também pode enviar ou receber o arquivo completo:</div>
     <div class="btnrow">
       <button class="btn" onclick="compartilharRelatorio()">📤 Enviar relatório ao gestor</button>
       <label class="btn ghost" style="text-align:center;cursor:pointer">📥 Receber relatório de operador
@@ -418,6 +425,124 @@ function backupPeriodo(){
 function nomeArquivoRelatorio(d){
   const op=(d.operador||'operador').trim().replace(/[^a-zA-Z0-9À-ÿ_-]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase()||'operador';
   return 'gefaz-relatorio-'+op+'-'+d.periodo.de+'_a_'+d.periodo.ate+'.json';
+}
+const normalizaNome=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+function dataResumo(s){
+  const m=String(s).match(/^(\d{2})\/(\d{2})\/(\d{2}|\d{4})$/);
+  if(!m)throw Error('Período inválido');
+  const ano=m[3].length===2?'20'+m[3]:m[3], iso=ano+'-'+m[2]+'-'+m[1];
+  if(!DATA_OK.test(iso))throw Error('Período inválido');
+  return iso;
+}
+function qtdResumo(s){
+  const n=Number(String(s).replace(/\./g,'').replace(',','.'));
+  if(!Number.isFinite(n)||n<0||n>1e9)throw Error('Quantidade inválida');
+  return Math.round(n*10);
+}
+function hashResumo(s){
+  let a=2166136261,b=2246822519;
+  for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);a=Math.imul(a^c,16777619);b=Math.imul(b^c,3266489917);}
+  return (a>>>0).toString(36)+(b>>>0).toString(36);
+}
+function parseRelatorioTexto(texto){
+  const linhas=String(texto||'').replace(/\r/g,'').split('\n')
+    .map(l=>l.replace(/^[>\s]+/,'').replace(/\*/g,'').trim()).filter(Boolean);
+  if(!linhas.some(l=>/^Gefaz Conta\b/i.test(l)))throw Error('Cabeçalho “Gefaz Conta” não encontrado');
+  const lp=linhas.find(l=>/^\d{2}\/\d{2}\/(?:\d{2}|\d{4})\s+a\s+\d{2}\/\d{2}\/(?:\d{2}|\d{4})$/i.test(l));
+  if(!lp)throw Error('Período não encontrado');
+  const partes=lp.split(/\s+a\s+/i),de=dataResumo(partes[0]),ate=dataResumo(partes[1]);
+  if(de>ate)throw Error('A data inicial está depois da final');
+  const lo=linhas.find(l=>/^Operador\s*:/i.test(l)),operador=lo&&lo.replace(/^Operador\s*:\s*/i,'').trim();
+  if(!operador)throw Error('Operador não encontrado');
+  const talhoes=[];
+  for(const l of linhas){
+    const m=l.match(/^(.+?):\s*[ÁA]rvore\s+([\d.,]+)\s*[·•-]\s*Ch[aã]o\s+([\d.,]+)\s*=\s*([\d.,]+)$/i);
+    if(!m)continue;
+    const arv=qtdResumo(m[2]),cha=qtdResumo(m[3]),total=qtdResumo(m[4]),nome=m[1].trim();
+    if(arv+cha!==total)throw Error('O total do talhão '+nome+' não fecha');
+    if(talhoes.some(t=>normalizaNome(t.nome)===normalizaNome(nome)))throw Error('Talhão repetido: '+nome);
+    talhoes.push({nome,arv,cha,total});
+  }
+  const lpass=linhas.find(l=>/^Por passada\s*:/i.test(l));
+  const mp=lpass&&lpass.match(/^Por passada\s*:\s*1[ªa]\s+([\d.,]+)\s*[·•-]\s*2[ªa]\s+([\d.,]+)$/i);
+  if(!mp)throw Error('Totais por passada não encontrados');
+  const passadas=[qtdResumo(mp[1]),qtdResumo(mp[2])];
+  const lt=linhas.find(l=>/^TOTAL\s*:/i.test(l));
+  const mt=lt&&lt.match(/^TOTAL\s*:\s*[ÁA]rvore\s+([\d.,]+)\s*\+\s*Ch[aã]o\s+([\d.,]+)\s*=\s*([\d.,]+)\s*carretas?$/i);
+  if(!mt)throw Error('Total geral não encontrado');
+  const totalArv=qtdResumo(mt[1]),totalCha=qtdResumo(mt[2]),total=qtdResumo(mt[3]);
+  const somaArv=talhoes.reduce((s,t)=>s+t.arv,0),somaCha=talhoes.reduce((s,t)=>s+t.cha,0);
+  if(totalArv+totalCha!==total||somaArv!==totalArv||somaCha!==totalCha)throw Error('Os totais por talhão não fecham com o TOTAL');
+  if(passadas[0]+passadas[1]!==total)throw Error('Os totais por passada não fecham com o TOTAL');
+  const maquinas=[];
+  const im=linhas.findIndex(l=>/^Por m[aá]quina\s*:/i.test(l));
+  const it=linhas.indexOf(lt);
+  if(im>=0){
+    for(const l of linhas.slice(im+1,it<0?linhas.length:it)){
+      const m=l.match(/^(.+?):\s*([\d.,]+)$/);if(!m)throw Error('Linha de máquina inválida: '+l);
+      const nome=/^Sem m[aá]quina anotada$/i.test(m[1].trim())?'':m[1].trim();
+      if(maquinas.some(x=>normalizaNome(x.nome)===normalizaNome(nome)))throw Error('Máquina repetida');
+      maquinas.push({nome,q:qtdResumo(m[2])});
+    }
+    if(maquinas.reduce((s,m)=>s+m.q,0)!==total)throw Error('Os totais por máquina não fecham com o TOTAL');
+  }
+  const chave='texto|'+normalizaNome(operador)+'|'+de+'|'+ate;
+  return {operador,de,ate,talhoes,passadas,maquinas,totalArv,totalCha,total,chave};
+}
+function fatiasRelatorio(r){
+  const fontes=[];
+  r.talhoes.forEach(t=>{if(t.arv)fontes.push({nome:t.nome,origem:'arvore',q:t.arv});if(t.cha)fontes.push({nome:t.nome,origem:'chao',q:t.cha});});
+  const passadas=[{passada:1,q:r.passadas[0]},{passada:2,q:r.passadas[1]}].filter(x=>x.q);
+  const maquinas=(r.maquinas.length?r.maquinas:[{nome:'',q:r.total}]).filter(x=>x.q).map(x=>({...x}));
+  const fs=fontes.map(x=>({...x})),ps=passadas.map(x=>({...x})),out=[];
+  let fi=0,pi=0,mi=0;
+  while(fi<fs.length&&pi<ps.length&&mi<maquinas.length){
+    const q=Math.min(fs[fi].q,ps[pi].q,maquinas[mi].q);
+    out.push({talhao:fs[fi].nome,origem:fs[fi].origem,passada:ps[pi].passada,maquina:maquinas[mi].nome,carretas:q/10});
+    fs[fi].q-=q;ps[pi].q-=q;maquinas[mi].q-=q;
+    if(!fs[fi].q)fi++;if(!ps[pi].q)pi++;if(!maquinas[mi].q)mi++;
+  }
+  if(fi!==fs.length||pi!==ps.length||mi!==maquinas.length)throw Error('Não foi possível conciliar os totais do relatório');
+  return out;
+}
+function aplicaRelatorioTexto(r){
+  const fatias=fatiasRelatorio(r),baseId='rt-'+hashResumo(r.chave)+'-',baseTs=new Date(r.ate+'T12:00:00').getTime();
+  mexe(()=>{
+    const antigos=new Map(db.registros.filter(x=>x.relatorioChave===r.chave).map(x=>[x.id,x]));
+    db.registros=db.registros.filter(x=>x.relatorioChave!==r.chave);
+    const idsNovos=new Set(fatias.map((x,i)=>baseId+i));
+    db.excluidos=(db.excluidos||[]).filter(id=>!idsNovos.has(id));
+    const talId=new Map();
+    r.talhoes.forEach(t=>{
+      let ex=db.talhoes.find(x=>normalizaNome(x.nome)===normalizaNome(t.nome));
+      if(!ex){ex={id:uid(),nome:t.nome};db.talhoes.push(ex);}
+      talId.set(normalizaNome(t.nome),ex.id);
+    });
+    fatias.forEach((x,i)=>{
+      const id=baseId+i,antigo=antigos.get(id);
+      const novo={id,data:r.ate,talhaoId:talId.get(normalizaNome(x.talhao)),origem:x.origem,
+        carretas:x.carretas,passada:x.passada,operador:r.operador,maquina:x.maquina,ts:baseTs+i,relatorioChave:r.chave};
+      if(antigo)novo.revisao=antigo.revisao||0;
+      db.registros.push(novo);
+    });
+  });
+  return fatias.length;
+}
+function importarRelatorioTexto(){
+  const campo=document.getElementById('relTexto'),box=document.getElementById('impTextoMsg');
+  try{
+    const r=parseRelatorioTexto(campo.value),anteriores=db.registros.filter(x=>x.relatorioChave===r.chave).length;
+    const aviso='Importar '+N(r.total/10)+' carretas de '+r.operador+' ('+dBR(r.de)+' a '+dBR(r.ate)+')?\n\n'+
+      'O resumo não detalha cada dia nem cruza máquina com talhão; os lançamentos consolidados serão registrados em '+dBR(r.ate)+'.'+
+      (anteriores?'\nA importação textual anterior deste operador e período será substituída.':'');
+    if(!confirm(aviso))return;
+    aplicaRelatorioTexto(r);render();
+    const b=document.getElementById('impTextoMsg');
+    if(b){b.classList.remove('hide');b.textContent='Relatório de '+r.operador+(anteriores?' atualizado: ':' recebido: ')+N(r.total/10)+' carretas consolidadas em '+dBR(r.ate)+'.';}
+    flash('Contagem atualizada');
+  }catch(e){
+    if(box){box.classList.remove('hide');box.textContent='Relatório não importado: '+(e&&e.message?e.message:'formato inválido')+'. Nenhuma alteração foi aplicada.';}
+  }
 }
 async function compartilharRelatorio(){
   const d=backupPeriodo(), nome=nomeArquivoRelatorio(d);
@@ -533,7 +658,7 @@ function validaBackup(d){
       !DATA_OK.test(r.data)||(r.passada!=null&&![1,2].includes(r.passada))||
       (r.ts!=null&&(!Number.isSafeInteger(r.ts)||!Number.isFinite(new Date(r.ts).getTime())))||
       (r.revisao!=null&&(!Number.isSafeInteger(r.revisao)||r.revisao<0))||
-      ['operador','maquina'].some(k=>r[k]!=null&&typeof r[k]!=='string'))throw Error('Registro inválido');
+      ['operador','maquina','relatorioChave'].some(k=>r[k]!=null&&typeof r[k]!=='string'))throw Error('Registro inválido');
     ids.add(r.id);
   }
   if(d.excluidos!=null&&(!Array.isArray(d.excluidos)||d.excluidos.some(id=>!texto(id))))throw Error('Exclusões inválidas');
