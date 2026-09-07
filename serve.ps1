@@ -10,8 +10,12 @@ while ($listener.IsListening) {
     $ctx = $listener.GetContext()
     $path = $ctx.Request.Url.LocalPath.TrimStart('/')
     if ([string]::IsNullOrEmpty($path)) { $path = 'index.html' }
-    $file = Join-Path $root $path
-    if ((Test-Path $file -PathType Leaf) -and ([System.IO.Path]::GetFullPath($file)).StartsWith($root)) {
+    $file = [System.IO.Path]::GetFullPath((Join-Path $root $path))
+    $rootPrefix = [System.IO.Path]::GetFullPath($root).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    $relative = [System.IO.Path]::GetRelativePath($root, $file)
+    if ($file.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase) -and
+        -not ($relative -split '[\\/]' | Where-Object { $_.StartsWith('.') }) -and
+        (Test-Path -LiteralPath $file -PathType Leaf)) {
       $bytes = [System.IO.File]::ReadAllBytes($file)
       $ext = [System.IO.Path]::GetExtension($file).ToLower()
       $ctx.Response.ContentType = if ($mime.ContainsKey($ext)) { $mime[$ext] } else { 'application/octet-stream' }

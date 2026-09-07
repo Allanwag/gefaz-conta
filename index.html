@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#5a2f16">
@@ -123,12 +123,12 @@
 
 <script>
 'use strict';
-const VERSAO='v14';
+const VERSAO='v15';
 const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const dia=(d=new Date())=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const today=()=>dia();
-const DATA_OK=/^\d{4}-\d{2}-\d{2}$/;
+const DATA_OK={test:s=>typeof s==='string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(s+'T12:00:00Z')) && new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s};
 const dBR=s=>{if(!s)return'';const[y,m,d]=s.split('-');return d+'/'+m+'/'+y.slice(2);};
 const hBR=ts=>{if(!ts)return'';const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
 const N=(v,dc=1)=>(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:dc,maximumFractionDigits:dc});
@@ -148,11 +148,30 @@ function carrega(){
   return null;
 }
 let db=carrega()||seed(), operador=localStorage.getItem(OPKEY)||'';
-const save=()=>{try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){flash('Sem espaço para salvar neste aparelho');}};
+const save=()=>{try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){
+  alert('Não foi possível salvar. A alteração não foi confirmada. Libere espaço ou permita o armazenamento e tente novamente.');
+  throw e;
+}};
 /* relê o que está gravado antes de mexer: o app costuma ficar aberto no atalho E na aba do navegador
    ao mesmo tempo; a cópia velha da memória sobrescrevia a outra e ressuscitava carretas já apagadas */
 function recarrega(){const d=carrega();if(d)db=d;}
-function mexe(fn){recarrega();const r=fn();save();return r;}
+function mexe(fn,importando=false){
+  recarrega();const antes=JSON.stringify(db);
+  try{
+    const anteriores=new Map(db.registros.map(r=>[r.id,JSON.stringify(r)]));
+    const r=fn();
+    db.excluidos=[...new Set(db.excluidos||[])];
+    if(!importando){
+      const atuais=new Set(db.registros.map(r=>r.id));
+      for(const id of anteriores.keys())if(!atuais.has(id))db.excluidos.push(id);
+      for(const item of db.registros){
+        const antigo=anteriores.get(item.id);
+        if(antigo && antigo!==JSON.stringify(item))item.revisao=(JSON.parse(antigo).revisao||0)+1;
+      }
+    }
+    save();return r;
+  }catch(e){db=JSON.parse(antes);render();throw e;}
+}
 /* talhões padrão só na primeira abertura — antes voltavam sozinhos toda vez que o app abria */
 (function aplicaPadrao(){
   if(db.padraoAplicado)return;
@@ -182,7 +201,7 @@ const talNome=id=>(db.talhoes.find(t=>t.id===id)||{nome:'—'}).nome;
 /* conserta contagem que ficou negativa na versão antiga do botão − (ex.: 0,5 − 1 = −0,5).
    roda na abertura e depois de importar, inclusive dados vindos de aparelho ainda desatualizado */
 function corrigeNegativos(){
-  const grupos={};
+  const grupos=Object.create(null);
   db.registros.forEach(r=>{const k=[r.data,r.talhaoId,r.origem,PASS(r)].join('|');(grupos[k]=grupos[k]||[]).push(r);});
   let mudou=false;
   Object.keys(grupos).forEach(k=>{
@@ -203,7 +222,7 @@ function corrigeDatas(){
   let mudou=false;
   db.registros.forEach(r=>{
     if(DATA_OK.test(r.data))return;
-    r.data=Number(r.ts)?dia(new Date(Number(r.ts))):today();
+    r.data=Number.isFinite(new Date(Number(r.ts)).getTime())&&Number(r.ts)?dia(new Date(Number(r.ts))):today();
     mudou=true;
   });
   return mudou;
@@ -270,7 +289,7 @@ const noPeriodo=(de,ate)=>db.registros.filter(r=>r.data>=de&&r.data<=ate);
 function pgRelatorio(){
   const {de,ate}=periodo();
   const rs=noPeriodo(de,ate);
-  const porTal={};
+  const porTal=Object.create(null);
   db.talhoes.forEach(t=>porTal[t.id]={arv:0,cha:0});
   rs.forEach(r=>{if(!porTal[r.talhaoId])porTal[r.talhaoId]={arv:0,cha:0};
     porTal[r.talhaoId][r.origem==='arvore'?'arv':'cha']+=carr(r);});
@@ -386,7 +405,7 @@ function exportCSV(){
   const linhas=[['Data','Hora','Talhao','Origem','Passada','Carretas','Operador','Maquina']];
   noPeriodo(de,ate).sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(r=>
     linhas.push([r.data,hBR(r.ts),talNome(r.talhaoId),r.origem==='arvore'?'Arvore':'Chao',PASS(r)+'a',String(carr(r)).replace('.',','),r.operador||'',r.maquina||'']));
-  const csv='﻿'+linhas.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const csv='﻿'+linhas.map(l=>l.map(c=>`"${String(c).replace(/^[\s]*[=+@-]/,m=>"'"+m).replace(/"/g,'""')}"`).join(';')).join('\n');
   baixar(new Blob([csv],{type:'text/csv'}),'gefaz-conta-'+de+'_a_'+ate+'.csv');
 }
 
@@ -460,41 +479,71 @@ function salvarOp(){operador=(document.getElementById('opNome').value||'').trim(
 function exportJSON(){
   recarrega(); /* backup sai do que está gravado, não de uma cópia velha desta tela */
   const dump={app:'gefaz-conta',v:1,operador,exportadoEm:new Date().toISOString(),
-    talhoes:db.talhoes,registros:db.registros};
+    talhoes:db.talhoes,registros:db.registros,excluidos:db.excluidos||[]};
   baixar(new Blob([JSON.stringify(dump)],{type:'application/json'}),
     'gefaz-conta-'+(operador||'backup').replace(/\s+/g,'-').toLowerCase()+'-'+today()+'.json');
 }
-function importJSON(file){
-  const box=document.getElementById('impMsg');
-  file.text().then(t=>{
-    const d=JSON.parse(t);
-    if(d.app!=='gefaz-conta'||!Array.isArray(d.registros))throw 0;
-    let novos=0;
-    mexe(()=>{
-      /* junta talhões por nome (evita duplicar), mapeia ids */
-      const idMap={};
-      (d.talhoes||[]).forEach(t=>{
-        if(!t||!t.nome)return;
-        let ex=db.talhoes.find(x=>String(x.nome).toLowerCase()===String(t.nome).toLowerCase());
-        if(!ex){ex={id:uid(),nome:t.nome};db.talhoes.push(ex);}
-        idMap[t.id]=ex.id;
-      });
-      (d.registros||[]).forEach(r=>{
-        if(!r)return;
-        const id=r.id||uid(), c=arred(r.carretas);
-        if(!c)return;                                  /* registro sem valor não entra na conta */
-        if(db.registros.some(x=>x.id===id))return;     /* dedup por id */
-        db.registros.push({...r,id,carretas:c,passada:PASS(r)===2?2:1,
-          data:DATA_OK.test(r.data)?r.data:(Number(r.ts)?dia(new Date(Number(r.ts))):today()),
-          talhaoId:idMap[r.talhaoId]||r.talhaoId});novos++;
-      });
-      corrigeNegativos();corrigeDatas();
-    });
+/* Validate the whole backup before changing local data. Keep stable IDs for deduplication. */
+function validaBackup(d){
+  const texto=v=>typeof v==='string'&&v.trim().length>0;
+  if(!d||d.app!=='gefaz-conta'||d.v!==1||!Array.isArray(d.talhoes)||!Array.isArray(d.registros))throw Error('Formato inválido');
+  const ids=new Set();
+  for(const t of d.talhoes){
+    if(!t||!texto(t.id)||!texto(t.nome)||ids.has(t.id))throw Error('Talhão inválido');
+    ids.add(t.id);
+  }
+  ids.clear();
+  for(const r of d.registros){
+    if(!r||!texto(r.id)||ids.has(r.id)||!texto(r.talhaoId)||!['arvore','chao'].includes(r.origem)||
+      typeof r.carretas!=='number'||!Number.isFinite(r.carretas)||Math.abs(r.carretas)>1e9||
+      !DATA_OK.test(r.data)||(r.passada!=null&&![1,2].includes(r.passada))||
+      (r.ts!=null&&(!Number.isSafeInteger(r.ts)||!Number.isFinite(new Date(r.ts).getTime())))||
+      (r.revisao!=null&&(!Number.isSafeInteger(r.revisao)||r.revisao<0))||
+      ['operador','maquina'].some(k=>r[k]!=null&&typeof r[k]!=='string'))throw Error('Registro inválido');
+    ids.add(r.id);
+  }
+  if(d.excluidos!=null&&(!Array.isArray(d.excluidos)||d.excluidos.some(id=>!texto(id))))throw Error('Exclusões inválidas');
+  return d;
+}
+function juntaBackup(d){
+  validaBackup(d);
+  let novos=0;
+  mexe(()=>{
+    const excluidos=new Set([...(db.excluidos||[]),...(d.excluidos||[])]);
+    const idMap=new Map();
+    for(const t of d.talhoes){
+      let ex=db.talhoes.find(x=>x.nome.trim().toLowerCase()===t.nome.trim().toLowerCase());
+      if(!ex){ex={id:uid(),nome:t.nome.trim()};db.talhoes.push(ex);}
+      idMap.set(t.id,ex.id);
+    }
+    const registros=new Map(db.registros.map(r=>[r.id,r]));
+    for(const r of d.registros){
+      if(excluidos.has(r.id))continue;
+      const atual=registros.get(r.id);
+      // Revision wins; deterministic tie break makes concurrent imports converge.
+      const rev=r.revisao||0, atualRev=atual?.revisao||0;
+      const desempate=x=>JSON.stringify([x.carretas,x.data,x.origem,x.passada||1,x.operador||'',x.maquina||'',x.ts||0]);
+      if(atual&&(rev<atualRev||(rev===atualRev&&desempate(r)<=desempate(atual))))continue;
+      registros.set(r.id,{...r,talhaoId:atual?.talhaoId||idMap.get(r.talhaoId)||r.talhaoId});
+      if(!atual)novos++;
+    }
+    db.excluidos=[...excluidos];
+    db.registros=[...registros.values()].filter(r=>!excluidos.has(r.id));
+  },true);
+  return novos;
+}
+async function importJSON(file){
+  try{
+    const d=JSON.parse(await file.text());
+    const novos=juntaBackup(d);
     render();
     const b=document.getElementById('impMsg');
-    if(b){b.classList.remove('hide');b.textContent=`Importado de ${d.operador||'operador'}: ${novos} registro(s) novo(s) somado(s).`;}
-    flash(novos+' registros somados');
-  }).catch(()=>{if(box){box.classList.remove('hide');box.textContent='Arquivo inválido — use um backup exportado pelo Gefaz Conta.';}});
+    if(b){b.classList.remove('hide');b.textContent='Backup consolidado: '+novos+' registro(s) novo(s); correções e exclusões aplicadas.';}
+    flash('Backup consolidado');
+  }catch(e){
+    const box=document.getElementById('impMsg');
+    if(box){box.classList.remove('hide');box.textContent='Importação não concluída. Confira o backup e o espaço disponível. Nenhuma alteração foi aplicada.';}
+  }
 }
 function zerar(){
   if(!confirm('Apagar TODAS as carretas lançadas neste aparelho? Os talhões são mantidos.'))return;
@@ -615,16 +664,13 @@ if('serviceWorker' in navigator){
   }catch(e){}
 }
 /* botão "Buscar atualização": limpa só o cache do programa e recarrega — não mexe nos lançamentos */
-function atualizarApp(){
-  flash('Buscando atualização…');
-  const fim=()=>setTimeout(()=>location.reload(),500);
-  Promise.resolve()
-    .then(()=>(self.caches&&caches.keys)?caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k)))):null)
-    .catch(()=>{})
-    .then(()=>('serviceWorker' in navigator&&navigator.serviceWorker.getRegistration)
-      ?navigator.serviceWorker.getRegistration().then(r=>r&&r.update&&r.update()).catch(()=>{}):null)
-    .catch(()=>{})
-    .then(fim,fim);
+async function atualizarApp(){
+  if(!navigator.onLine){flash('Sem conexão. Tente atualizar quando houver sinal.');return;}
+  try{
+    const reg=await navigator.serviceWorker?.getRegistration();
+    if(reg)await reg.update();
+    flash('Atualização consultada');
+  }catch(e){flash('Não foi possível consultar a atualização');}
 }
 
 render();
