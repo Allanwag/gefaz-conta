@@ -27,10 +27,15 @@ apontando para `https://github.com/allanwag/gefaz-conta.git`). Falta só:
 1. Cada um abre o link no celular e **instala** (Chrome/Android: menu → "Instalar app"; Safari/iPhone: compartilhar → "Adicionar à Tela de Início").
 2. No primeiro uso, cada um **digita seu nome** (operador).
 3. Escolhe o talhão e toca **+1 / +½** em Árvore ou Chão a cada carreta. O **−1** corrige.
-4. No fim do dia, cada operador vai em **Dados → Exportar meus dados** e te envia o arquivo `.json` (WhatsApp/e-mail).
-5. Você importa os arquivos em **Dados → Importar / juntar** — a contagem dos três aparelhos vira um total só, sem duplicar. Depois **Relatório → Enviar resumo pelo WhatsApp** ou **Baixar CSV**.
+4. No fim do dia, cada operador abre **Relatório**, escolhe o período e toca em **Enviar relatório ao gestor**. O app compartilha um arquivo `.json` pelo WhatsApp/e-mail (ou baixa o arquivo quando o compartilhamento direto não estiver disponível).
+5. Você abre **Relatório → Receber relatório de operador** e escolhe o arquivo recebido. A contagem dos aparelhos é atualizada sem duplicar carretas, mesmo que o mesmo arquivo seja importado outra vez.
 
 > Enquanto não houver nuvem, guarde os backups: os dados vivem no aparelho.
+
+## Revisão v16
+
+- O relatório agora pode ser enviado ao gestor como um arquivo de consolidação do período selecionado.
+- O gestor pode receber esse arquivo diretamente na tela de Relatório e atualizar a própria contagem sem duplicar lançamentos.
 
 ## Revisão v15
 

@@ -60,3 +60,15 @@ test('concurrent revision tie converges regardless of import order',()=>{
   a.run(`juntaBackup(${x});juntaBackup(${y})`);b.run(`juntaBackup(${y});juntaBackup(${x})`);
   assert.equal(a.run('somaReg(db.registros)'),b.run('somaReg(db.registros)'));
 });
+test('operator report contains only the selected period and remains idempotent',()=>{
+  const source=app();
+  source.run(`operador='João';juntaBackup(${JSON.stringify(backup([
+    record({id:'old',data:'2026-09-06'}),record({id:'today'}),record({id:'new',data:'2026-09-08'})
+  ]))});repDe='2026-09-07';repAte='2026-09-07'`);
+  const report=source.run('JSON.stringify(backupPeriodo())');
+  const parsed=JSON.parse(report);
+  assert.equal(parsed.tipo,'relatorio-operador');assert.equal(parsed.operador,'João');
+  assert.deepEqual(parsed.registros.map(r=>r.id),['today']);
+  const target=app();target.run(`juntaBackup(${report});juntaBackup(${report})`);
+  assert.equal(target.run('db.registros.length'),1);assert.equal(target.run('somaReg(db.registros)'),1);
+});

@@ -123,7 +123,7 @@
 
 <script>
 'use strict';
-const VERSAO='v15';
+const VERSAO='v16';
 const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const dia=(d=new Date())=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -363,6 +363,16 @@ function pgRelatorio(){
   <div class="btnrow" style="margin-top:16px">
     <button class="btn" onclick="enviarWhats()">📲 Enviar resumo pelo WhatsApp</button>
     <button class="btn ghost" onclick="exportCSV()">📄 Baixar planilha (CSV)</button>
+  </div>
+  <h2>Atualizar a contagem</h2>
+  <div class="card">
+    <div class="btnrow">
+      <button class="btn" onclick="compartilharRelatorio()">📤 Enviar relatório ao gestor</button>
+      <label class="btn ghost" style="text-align:center;cursor:pointer">📥 Receber relatório de operador
+        <input type="file" data-import data-msg="impRelMsg" accept=".json,application/json" class="hide"></label>
+    </div>
+    <div class="msg">O arquivo do relatório contém os lançamentos do período acima. Ao recebê-lo de um operador, importe aqui para atualizar sua contagem. O mesmo arquivo pode ser importado novamente sem duplicar carretas.</div>
+    <div id="impRelMsg" class="msg hide"></div>
   </div>`;
 }
 function resumoTexto(){
@@ -397,6 +407,30 @@ function enviarWhats(){
   const txt=resumoTexto();
   if(navigator.share){navigator.share({text:txt}).catch(()=>{});}
   else{window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank');}
+}
+function backupPeriodo(){
+  recarrega();
+  const {de,ate}=periodo();
+  return {app:'gefaz-conta',v:1,tipo:'relatorio-operador',operador,
+    periodo:{de,ate},exportadoEm:new Date().toISOString(),talhoes:db.talhoes,
+    registros:noPeriodo(de,ate),excluidos:db.excluidos||[]};
+}
+function nomeArquivoRelatorio(d){
+  const op=(d.operador||'operador').trim().replace(/[^a-zA-Z0-9À-ÿ_-]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase()||'operador';
+  return 'gefaz-relatorio-'+op+'-'+d.periodo.de+'_a_'+d.periodo.ate+'.json';
+}
+async function compartilharRelatorio(){
+  const d=backupPeriodo(), nome=nomeArquivoRelatorio(d);
+  const texto=JSON.stringify(d), blob=new Blob([texto],{type:'application/json'});
+  try{
+    const arquivo=new File([texto],nome,{type:'application/json'});
+    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[arquivo]}))){
+      await navigator.share({title:'Relatório Gefaz Conta',
+        text:'Relatório de '+(operador||'operador')+' — '+dBR(d.periodo.de)+' a '+dBR(d.periodo.ate),files:[arquivo]});
+      flash('Relatório compartilhado');return;
+    }
+  }catch(e){if(e&&e.name==='AbortError')return;}
+  baixar(blob,nome);flash('Relatório baixado para enviar');
 }
 function exportCSV(){
   /* a planilha ignorava o filtro De/Até e vinha sempre com tudo, diferente do resumo do WhatsApp */
@@ -450,7 +484,7 @@ function pgDados(){
     <div class="btnrow">
       <button class="btn" onclick="exportJSON()">💾 Exportar meus dados (backup)</button>
       <label class="btn ghost" style="text-align:center;cursor:pointer">📥 Importar / juntar de outro operador
-        <input type="file" id="imp" accept=".json" class="hide"></label>
+        <input type="file" data-import data-msg="impMsg" accept=".json,application/json" class="hide"></label>
     </div>
     <div class="msg">Cada operador exporta o backup e te envia (WhatsApp/e-mail). Você importa os arquivos um a um — o app <b>soma sem duplicar</b>, então dá para juntar a contagem dos três aparelhos aqui.</div>
     <div id="impMsg" class="msg hide"></div>
@@ -532,17 +566,18 @@ function juntaBackup(d){
   },true);
   return novos;
 }
-async function importJSON(file){
+async function importJSON(file,msgId='impMsg'){
   try{
     const d=JSON.parse(await file.text());
     const novos=juntaBackup(d);
     render();
-    const b=document.getElementById('impMsg');
-    if(b){b.classList.remove('hide');b.textContent='Backup consolidado: '+novos+' registro(s) novo(s); correções e exclusões aplicadas.';}
-    flash('Backup consolidado');
+    const b=document.getElementById(msgId);
+    const origem=d.tipo==='relatorio-operador'?'Relatório de '+(d.operador||'operador'):'Backup';
+    if(b){b.classList.remove('hide');b.textContent=origem+' recebido: '+novos+' registro(s) novo(s); correções e exclusões aplicadas.';}
+    flash('Contagem atualizada');
   }catch(e){
-    const box=document.getElementById('impMsg');
-    if(box){box.classList.remove('hide');box.textContent='Importação não concluída. Confira o backup e o espaço disponível. Nenhuma alteração foi aplicada.';}
+    const box=document.getElementById(msgId);
+    if(box){box.classList.remove('hide');box.textContent='Importação não concluída. Confira o arquivo recebido e o espaço disponível. Nenhuma alteração foi aplicada.';}
   }
 }
 function zerar(){
@@ -573,8 +608,9 @@ function render(){
   document.getElementById('opChip').textContent='👤 '+(operador||'definir');
   document.getElementById('main').innerHTML=PAGES[tab]();
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
-  const imp=document.getElementById('imp');
-  if(imp)imp.onchange=e=>{if(e.target.files[0])importJSON(e.target.files[0]);};
+  document.querySelectorAll('[data-import]').forEach(imp=>{
+    imp.onchange=e=>{if(e.target.files[0])importJSON(e.target.files[0],imp.dataset.msg);};
+  });
 }
 
 /* eventos */
