@@ -32,6 +32,16 @@ apontando para `https://github.com/allanwag/gefaz-conta.git`). Falta só:
 
 > Enquanto não houver nuvem, guarde os backups: os dados vivem no aparelho.
 
+## Revisão v18
+
+- Correções importadas atualizam também o talhão do lançamento. Alterações simultâneas têm desempate pelo conteúdo e pelo nome do talhão, independente dos IDs locais.
+- Ao restaurar uma parte retirada de um resumo textual, o app cria outro ID e preserva o histórico de exclusões. A restauração chega aos outros aparelhos sem permitir que backups antigos ressuscitem os registros excluídos.
+- Resumos textuais de períodos sobrepostos do mesmo operador são recusados. Também não é permitido somar o texto e os lançamentos detalhados correspondentes, inclusive pela importação JSON. A importação é revertida integralmente e informa o motivo.
+- Para atualizar um resumo textual, mantenha o mesmo operador e as mesmas datas inicial e final. Para trabalhar com períodos variáveis, use os arquivos completos desde o início; eles identificam cada lançamento. Se já houver um resumo textual correspondente, faça um backup e confira/remova seus lançamentos consolidados antes de importar os arquivos detalhados.
+- O texto do WhatsApp identifica o operador dos lançamentos. Resumos com vários operadores ou autoria ausente continuam disponíveis para consulta e compartilhamento, mas sua consolidação exige o arquivo completo.
+- Lançamentos sem talhão cadastrado saem no resumo com os totais separados de árvore e chão. Erros na importação textual mantêm o texto colado para correção.
+- O cache offline acompanha a v18. Nenhuma migração apaga as contagens existentes; duplicações antigas precisam de conferência, pois o resumo não contém IDs dos lançamentos originais.
+
 ## Revisão v17
 
 - A contagem agora pode ser atualizada colando o resumo textual enviado pelo WhatsApp.

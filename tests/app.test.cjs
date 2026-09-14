@@ -113,3 +113,113 @@ test('pasted summary is rejected atomically when totals do not close',()=>{
   assert.throws(()=>run(`aplicaRelatorioTexto(parseRelatorioTexto(${JSON.stringify(bad)}))`));
   assert.equal(run('JSON.stringify(db)'),before);
 });
+
+const dump=a=>a.run("JSON.stringify({app:'gefaz-conta',v:1,...db})");
+const paste=(a,text)=>a.run(`aplicaRelatorioTexto(parseRelatorioTexto(${JSON.stringify(text)}))`);
+const compactReport=(velho=1,larga=1)=>`Gefaz Conta — Carretas de café
+01/09/26 a 07/09/26
+Operador: Jean
+Velho: Árvore ${velho},0 · Chão 0,0 = ${velho},0
+Larga: Árvore ${larga},0 · Chão 0,0 = ${larga},0
+Por passada: 1ª ${velho+larga},0 · 2ª 0,0
+TOTAL: Árvore ${velho+larga},0 + Chão 0,0 = ${velho+larga},0 carretas`;
+
+test('a newer backup revision can move a record to its corrected plot',()=>{
+  const a=app();a.run(`juntaBackup(${JSON.stringify(backup([record()]))})`);
+  const changed=backup([record({talhaoId:'other',revisao:1})],{talhoes:[{id:'other',nome:'Larga'}]});
+  a.run(`juntaBackup(${JSON.stringify(changed)})`);
+  assert.equal(a.run('talNome(db.registros[0].talhaoId)'),'Larga');
+});
+
+test('concurrent plot corrections converge by plot name across device IDs',()=>{
+  const a=app(),b=app();
+  const x=JSON.stringify(backup([record({revisao:1})]));
+  const y=JSON.stringify(backup([record({revisao:1,talhaoId:'other'})],{talhoes:[{id:'other',nome:'Larga'}]}));
+  a.run(`juntaBackup(${x});juntaBackup(${y})`);b.run(`juntaBackup(${y});juntaBackup(${x})`);
+  assert.equal(a.run('talNome(db.registros[0].talhaoId)'),b.run('talNome(db.registros[0].talhaoId)'));
+});
+
+test('revised summary keeps plot totals after sharing to a second device',()=>{
+  const a=app(),b=app();paste(a,compactReport());b.run(`juntaBackup(${dump(a)})`);
+  paste(a,compactReport(0,2));b.run(`juntaBackup(${dump(a)})`);
+  assert.equal(b.run("somaReg(db.registros.filter(r=>talNome(r.talhaoId)==='Larga'))"),2);
+  assert.equal(b.run("somaReg(db.registros.filter(r=>talNome(r.talhaoId)==='Velho'))"),0);
+});
+
+test('restored summary slices sync without clearing tombstones or reviving old backups',()=>{
+  const a=app(),b=app();paste(a,compactReport());const first=dump(a);b.run(`juntaBackup(${first})`);
+  paste(a,compactReport(1,0));const reduced=dump(a);b.run(`juntaBackup(${reduced})`);
+  const deleted=JSON.parse(reduced).excluidos;
+  b.run(`juntaBackup(${first})`);assert.equal(b.run('somaReg(db.registros)'),1);
+  paste(a,compactReport());const restored=dump(a);b.run(`juntaBackup(${restored})`);
+  assert.equal(b.run('somaReg(db.registros)'),2);
+  for(const id of deleted)assert.ok(JSON.parse(restored).excluidos.includes(id));
+  paste(a,compactReport());assert.deepEqual(JSON.parse(dump(a)).registros,JSON.parse(restored).registros);
+  b.run(`juntaBackup(${reduced});juntaBackup(${first});juntaBackup(${restored})`);
+  assert.equal(b.run('somaReg(db.registros)'),2);
+});
+
+test('overlapping text periods from the same operator are rejected atomically',()=>{
+  const a=app();paste(a,compactReport());const before=dump(a);
+  assert.throws(()=>paste(a,compactReport().replace('01/09/26 a 07/09/26','05/09/26 a 09/09/26')),/sobrepo|sobrepõe/i);
+  assert.equal(dump(a),before);
+});
+
+test('non-overlapping periods and different operators still consolidate',()=>{
+  const a=app();paste(a,compactReport());
+  paste(a,compactReport().replace('01/09/26 a 07/09/26','08/09/26 a 09/09/26'));
+  paste(a,compactReport().replace('Operador: Jean','Operador: João'));
+  assert.equal(a.run('somaReg(db.registros)'),6);
+});
+
+test('text and detailed records cannot double-count the same operator and period in either import order',()=>{
+  const detail=JSON.stringify(backup([record({operador:'Jean'})]));
+  const a=app();a.run(`juntaBackup(${detail})`);const before=dump(a);
+  assert.throws(()=>paste(a,compactReport()),/sobrepo|sobrepõe/i);assert.equal(dump(a),before);
+  const b=app();paste(b,compactReport());const beforeB=dump(b);
+  assert.throws(()=>b.run(`juntaBackup(${detail})`),/sobrepo|sobrepõe/i);assert.equal(dump(b),beforeB);
+});
+
+test('overlapping text reports also cannot be combined through JSON backups',()=>{
+  const a=app(),b=app();paste(a,compactReport());
+  paste(b,compactReport().replace('01/09/26 a 07/09/26','02/09/26 a 08/09/26'));
+  const before=dump(a);
+  assert.throws(()=>a.run(`juntaBackup(${dump(b)})`),/sobrepo|sobrepõe/i);
+  assert.equal(dump(a),before);
+});
+
+test('exported text attributes a single operator to the records, not the receiving manager',()=>{
+  const a=app();a.run(`operador='Gestor';juntaBackup(${JSON.stringify(backup([record({operador:'Jean'})]))})`);
+  assert.equal(a.run('parseRelatorioTexto(resumoTexto()).operador'),'Jean');
+});
+
+test('multi-operator text remains shareable but is not importable as one operator',()=>{
+  const a=app();a.run(`operador='Gestor';juntaBackup(${JSON.stringify(backup([record({operador:'Jean'}),record({id:'r2',operador:'João'})]))})`);
+  const text=a.run('resumoTexto()');assert.match(text,/Jean/);assert.match(text,/João/);
+  assert.throws(()=>a.run('parseRelatorioTexto(resumoTexto())'),/operador|consolidado/i);
+});
+
+test('exported text with orphan plots preserves both origins and can be imported',()=>{
+  const a=app();a.run(`operador='Jean';juntaBackup(${JSON.stringify(backup([record({talhaoId:'missing',operador:'Jean'}),record({id:'r2',talhaoId:'missing',operador:'Jean',origem:'chao',carretas:0.5})],{talhoes:[]}))})`);
+  assert.equal(a.run('parseRelatorioTexto(resumoTexto()).total'),15);
+  assert.equal(a.run('parseRelatorioTexto(resumoTexto()).totalCha'),5);
+});
+
+test('restored summary IDs remain stable when received from another time zone',()=>{
+  const a=app();paste(a,compactReport());paste(a,compactReport(1,0));paste(a,compactReport());
+  const data=JSON.parse(dump(a));data.registros.forEach(r=>{r.ts+=3600000;});
+  const b=app();b.run(`juntaBackup(${JSON.stringify(data)})`);const before=JSON.parse(dump(b)).registros;
+  paste(b,compactReport());assert.deepEqual(JSON.parse(dump(b)).registros,before);
+});
+
+test('a failed pasted import preserves the text and shows the error after rollback redraws the form',()=>{
+  const a=app();paste(a,compactReport());const before=dump(a);
+  const overlap=compactReport().replace('01/09/26 a 07/09/26','05/09/26 a 09/09/26');
+  a.run(`var fields;function confirm(){return true;}
+    render=()=>{fields={relTexto:{value:''},impTextoMsg:{textContent:'',classList:{remove(){}}}};};
+    document.getElementById=id=>fields[id];render();fields.relTexto.value=${JSON.stringify(overlap)};
+    importarRelatorioTexto();`);
+  assert.equal(dump(a),before);
+  assert.equal(a.run('fields.relTexto.value'),overlap);
+  assert.match(a.run('fields.impTextoMsg.textContent'),/Sobreposição/);
+});

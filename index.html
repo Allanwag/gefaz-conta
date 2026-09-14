@@ -124,7 +124,7 @@
 
 <script>
 'use strict';
-const VERSAO='v17';
+const VERSAO='v18';
 const LS='gefaz-conta-v1', OPKEY='gefaz-conta-operador', UIKEY='gefaz-conta-ui';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const dia=(d=new Date())=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -370,7 +370,7 @@ function pgRelatorio(){
     <div class="field"><label>Cole aqui o relatório recebido</label>
       <textarea id="relTexto" placeholder="Gefaz Conta — Carretas de café&#10;30/07/26 a 11/08/26&#10;Operador: Jean&#10;&#10;Velho: Árvore 11,0 · Chão 0,0 = 11,0&#10;..."></textarea></div>
     <button class="btn" onclick="importarRelatorioTexto()">📋 Atualizar com relatório copiado</button>
-    <div class="msg">O app confere se os totais fecham antes de atualizar. Um novo texto do mesmo operador e período substitui a importação textual anterior. Como o resumo não cruza máquina, talhão e dia, os lançamentos aparecem identificados como “consolidado”.</div>
+    <div class="msg">O app confere se os totais fecham antes de atualizar. Um novo texto do mesmo operador e período substitui a importação textual anterior. Períodos sobrepostos ou misturados com lançamentos detalhados do mesmo operador são recusados para evitar duplicação. Como o resumo não cruza máquina, talhão e dia, os lançamentos aparecem identificados como “consolidado”.</div>
     <div id="impTextoMsg" class="msg hide"></div>
     <div class="msg" style="margin-top:14px">Você também pode enviar ou receber o arquivo completo:</div>
     <div class="btnrow">
@@ -383,19 +383,28 @@ function pgRelatorio(){
   </div>`;
 }
 function resumoTexto(){
+  recarrega();
   const {de,ate}=periodo();
   const rs=noPeriodo(de,ate);
   const totArv=somaReg(rs.filter(r=>r.origem==='arvore'));
   const totCha=somaReg(rs.filter(r=>r.origem==='chao'));
-  let t=`Gefaz Conta — Carretas de café\n${dBR(de)} a ${dBR(ate)}\nOperador: ${operador||'—'}\n\n`;
+  const ops=[...new Map(rs.map(r=>[normalizaNome(r.operador),r.operador?.trim()||'Não identificado'])).values()];
+  const autoria=ops.length===1&&rs.every(r=>normalizaNome(r.operador))?'Operador: '+ops[0]:
+    rs.length?'Operadores (consolidado): '+ops.join(', '):'Operador: '+(operador||'—');
+  let t=`Gefaz Conta — Carretas de café\n${dBR(de)} a ${dBR(ate)}\n${autoria}\n\n`;
   db.talhoes.forEach(tl=>{
     const a=somaReg(rs.filter(r=>r.talhaoId===tl.id&&r.origem==='arvore'));
     const c=somaReg(rs.filter(r=>r.talhaoId===tl.id&&r.origem==='chao'));
     if(a||c)t+=`${tl.nome}: Árvore ${N(a)} · Chão ${N(c)} = ${N(a+c)}\n`;
   });
   /* sem esta linha as carretas de talhão excluído entravam só no TOTAL e a conta não fechava */
-  const orf=somaReg(rs.filter(r=>!db.talhoes.find(t=>t.id===r.talhaoId)));
-  if(orf)t+=`Talhão excluído: ${N(orf)}\n`;
+  const orfaos=rs.filter(r=>!db.talhoes.find(t=>t.id===r.talhaoId));
+  const orfArv=somaReg(orfaos.filter(r=>r.origem==='arvore')),orfCha=somaReg(orfaos.filter(r=>r.origem==='chao'));
+  if(orfArv||orfCha){
+    let nome='Talhão excluído';
+    while(db.talhoes.some(t=>normalizaNome(t.nome)===normalizaNome(nome)))nome+=' (sem cadastro)';
+    t+=`${nome}: Árvore ${N(orfArv)} · Chão ${N(orfCha)} = ${N(orfArv+orfCha)}\n`;
+  }
   const p1=somaReg(rs.filter(r=>PASS(r)===1));
   const p2=somaReg(rs.filter(r=>PASS(r)===2));
   t+=`\nPor passada: 1ª ${N(p1)} · 2ª ${N(p2)}`;
@@ -448,6 +457,7 @@ function parseRelatorioTexto(texto){
   const linhas=String(texto||'').replace(/\r/g,'').split('\n')
     .map(l=>l.replace(/^[>\s]+/,'').replace(/\*/g,'').trim()).filter(Boolean);
   if(!linhas.some(l=>/^Gefaz Conta\b/i.test(l)))throw Error('Cabeçalho “Gefaz Conta” não encontrado');
+  if(linhas.some(l=>/^Operadores\b/i.test(l)))throw Error('Resumo consolidado de operadores: receba o arquivo completo para preservar a autoria');
   const lp=linhas.find(l=>/^\d{2}\/\d{2}\/(?:\d{2}|\d{4})\s+a\s+\d{2}\/\d{2}\/(?:\d{2}|\d{4})$/i.test(l));
   if(!lp)throw Error('Período não encontrado');
   const partes=lp.split(/\s+a\s+/i),de=dataResumo(partes[0]),ate=dataResumo(partes[1]);
@@ -508,10 +518,11 @@ function fatiasRelatorio(r){
 function aplicaRelatorioTexto(r){
   const fatias=fatiasRelatorio(r),baseId='rt-'+hashResumo(r.chave)+'-',baseTs=new Date(r.ate+'T12:00:00').getTime();
   mexe(()=>{
-    const antigos=new Map(db.registros.filter(x=>x.relatorioChave===r.chave).map(x=>[x.id,x]));
+    // A posição fica no ID; não depende do fuso horário de quem recebe o arquivo.
+    const antigos=new Map(db.registros.filter(x=>x.relatorioChave===r.chave&&x.id.startsWith(baseId))
+      .map(x=>[Number(x.id.slice(baseId.length).split('-')[0]),x]));
     db.registros=db.registros.filter(x=>x.relatorioChave!==r.chave);
-    const idsNovos=new Set(fatias.map((x,i)=>baseId+i));
-    db.excluidos=(db.excluidos||[]).filter(id=>!idsNovos.has(id));
+    const excluidos=new Set(db.excluidos||[]);
     const talId=new Map();
     r.talhoes.forEach(t=>{
       let ex=db.talhoes.find(x=>normalizaNome(x.nome)===normalizaNome(t.nome));
@@ -519,17 +530,21 @@ function aplicaRelatorioTexto(r){
       talId.set(normalizaNome(t.nome),ex.id);
     });
     fatias.forEach((x,i)=>{
-      const id=baseId+i,antigo=antigos.get(id);
+      const antigo=antigos.get(i);
+      // Uma exclusão já pode ter viajado a outro aparelho; nunca reutilize esse ID.
+      let id=antigo?.id||baseId+i;
+      if(excluidos.has(id))id=baseId+i+'-'+uid();
       const novo={id,data:r.ate,talhaoId:talId.get(normalizaNome(x.talhao)),origem:x.origem,
-        carretas:x.carretas,passada:x.passada,operador:r.operador,maquina:x.maquina,ts:baseTs+i,relatorioChave:r.chave};
-      if(antigo)novo.revisao=antigo.revisao||0;
+        carretas:x.carretas,passada:x.passada,operador:r.operador,maquina:x.maquina,ts:antigo?.ts??baseTs+i,relatorioChave:r.chave};
+      novo.revisao=antigo?.revisao||0;
       db.registros.push(novo);
     });
+    validaSobreposicao(db.registros);
   });
   return fatias.length;
 }
 function importarRelatorioTexto(){
-  const campo=document.getElementById('relTexto'),box=document.getElementById('impTextoMsg');
+  const campo=document.getElementById('relTexto');
   try{
     const r=parseRelatorioTexto(campo.value),anteriores=db.registros.filter(x=>x.relatorioChave===r.chave).length;
     const aviso='Importar '+N(r.total/10)+' carretas de '+r.operador+' ('+dBR(r.de)+' a '+dBR(r.ate)+')?\n\n'+
@@ -541,6 +556,9 @@ function importarRelatorioTexto(){
     if(b){b.classList.remove('hide');b.textContent='Relatório de '+r.operador+(anteriores?' atualizado: ':' recebido: ')+N(r.total/10)+' carretas consolidadas em '+dBR(r.ate)+'.';}
     flash('Contagem atualizada');
   }catch(e){
+    const box=document.getElementById('impTextoMsg');
+    const atual=document.getElementById('relTexto');
+    if(atual)atual.value=campo.value;
     if(box){box.classList.remove('hide');box.textContent='Relatório não importado: '+(e&&e.message?e.message:'formato inválido')+'. Nenhuma alteração foi aplicada.';}
   }
 }
@@ -643,6 +661,25 @@ function exportJSON(){
     'gefaz-conta-'+(operador||'backup').replace(/\s+/g,'-').toLowerCase()+'-'+today()+'.json');
 }
 /* Validate the whole backup before changing local data. Keep stable IDs for deduplication. */
+function intervaloTexto(r){
+  const m=String(r.relatorioChave||'').match(/^texto\|(.+)\|(\d{4}-\d{2}-\d{2})\|(\d{4}-\d{2}-\d{2})$/);
+  if(!m||!DATA_OK.test(m[2])||!DATA_OK.test(m[3])||m[2]>m[3]||m[1]!==normalizaNome(r.operador))return null;
+  return {de:m[2],ate:m[3]};
+}
+function validaSobreposicao(registros){
+  const resumos=new Map();
+  for(const r of registros)if(r.relatorioChave)resumos.set(r.relatorioChave,r);
+  for(const [chave,r] of resumos){
+    const periodo=intervaloTexto(r);
+    if(!periodo)throw Error('Período do resumo consolidado inválido');
+    const conflito=registros.some(x=>{
+      if(x.relatorioChave===chave||normalizaNome(x.operador)!==normalizaNome(r.operador))return false;
+      const outro=intervaloTexto(x)||{de:x.data,ate:x.data};
+      return outro.de<=periodo.ate&&outro.ate>=periodo.de;
+    });
+    if(conflito)throw Error('Sobreposição de contagem de '+r.operador+': já há dados neste período. Atualize o texto com o mesmo período original ou use apenas arquivos completos, sem o resumo textual correspondente');
+  }
+}
 function validaBackup(d){
   const texto=v=>typeof v==='string'&&v.trim().length>0;
   if(!d||d.app!=='gefaz-conta'||d.v!==1||!Array.isArray(d.talhoes)||!Array.isArray(d.registros))throw Error('Formato inválido');
@@ -659,6 +696,7 @@ function validaBackup(d){
       (r.ts!=null&&(!Number.isSafeInteger(r.ts)||!Number.isFinite(new Date(r.ts).getTime())))||
       (r.revisao!=null&&(!Number.isSafeInteger(r.revisao)||r.revisao<0))||
       ['operador','maquina','relatorioChave'].some(k=>r[k]!=null&&typeof r[k]!=='string'))throw Error('Registro inválido');
+    if(r.relatorioChave&&!intervaloTexto(r))throw Error('Período do resumo consolidado inválido');
     ids.add(r.id);
   }
   if(d.excluidos!=null&&(!Array.isArray(d.excluidos)||d.excluidos.some(id=>!texto(id))))throw Error('Exclusões inválidas');
@@ -679,15 +717,18 @@ function juntaBackup(d){
     for(const r of d.registros){
       if(excluidos.has(r.id))continue;
       const atual=registros.get(r.id);
+      const recebido={...r,talhaoId:idMap.get(r.talhaoId)||r.talhaoId};
       // Revision wins; deterministic tie break makes concurrent imports converge.
       const rev=r.revisao||0, atualRev=atual?.revisao||0;
-      const desempate=x=>JSON.stringify([x.carretas,x.data,x.origem,x.passada||1,x.operador||'',x.maquina||'',x.ts||0]);
-      if(atual&&(rev<atualRev||(rev===atualRev&&desempate(r)<=desempate(atual))))continue;
-      registros.set(r.id,{...r,talhaoId:atual?.talhaoId||idMap.get(r.talhaoId)||r.talhaoId});
+      const desempate=x=>JSON.stringify([x.carretas,x.data,x.origem,x.passada||1,x.operador||'',x.maquina||'',x.ts||0,
+        db.talhoes.find(t=>t.id===x.talhaoId)?.nome||x.talhaoId,x.relatorioChave||'']);
+      if(atual&&(rev<atualRev||(rev===atualRev&&desempate(recebido)<=desempate(atual))))continue;
+      registros.set(r.id,recebido);
       if(!atual)novos++;
     }
     db.excluidos=[...excluidos];
     db.registros=[...registros.values()].filter(r=>!excluidos.has(r.id));
+    validaSobreposicao(db.registros);
   },true);
   return novos;
 }
@@ -702,7 +743,7 @@ async function importJSON(file,msgId='impMsg'){
     flash('Contagem atualizada');
   }catch(e){
     const box=document.getElementById(msgId);
-    if(box){box.classList.remove('hide');box.textContent='Importação não concluída. Confira o arquivo recebido e o espaço disponível. Nenhuma alteração foi aplicada.';}
+    if(box){box.classList.remove('hide');box.textContent='Importação não concluída: '+(e?.message||'confira o arquivo e o espaço disponível')+'. Nenhuma alteração foi aplicada.';}
   }
 }
 function zerar(){
