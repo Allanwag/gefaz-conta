@@ -1,4 +1,4 @@
-const CACHE = 'gefaz-conta-v18';
+const CACHE = 'gefaz-conta-v19';
 const PREFIX = 'gefaz-conta-';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {

@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#5a2f16">
+<meta name="theme-color" content="#090e0b">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Gefaz Conta — Carretas de Café</title>
@@ -105,6 +106,50 @@
   .flash{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:var(--ink);color:var(--bg);
     padding:8px 16px;border-radius:99px;font-size:14px;font-weight:600;opacity:0;transition:opacity .2s;z-index:30;pointer-events:none}
   .flash.on{opacity:1}
+  /* ───── Tema "Codex" (mesmo visual do Gefaz360 Codex; sempre escuro) ───── */
+  :root{
+    color-scheme:dark;
+    --canvas:#0b100d; --sidebar:#090e0b; --raised:#18221b; --soft:#1d2820; --lime:#b0d678; --line-soft:#263229;
+    --bg:#0b100d; --surface:#131a15; --surface2:#18221b; --ink:#edf4ee; --ink2:#a9b7ac;
+    --muted:#87968a; --line:#344239; --border:rgba(237,244,238,.12);
+    --arvore:#7eaf73; --arvore-d:#416c44; --chao:#eb925d; --chao-d:#8c5533;
+    --cafe:#416c44; --accent:#416c44; --good:#7eaf73; --warn:#dfad59; --crit:#df776e;
+  }
+  html,body{background:var(--canvas)}
+  body{font-family:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif}
+  ::selection{background:rgba(126,175,115,.35)}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:#8ba783;box-shadow:0 0 0 3px rgba(126,175,115,.22)}
+  button:focus-visible{outline:2px solid var(--lime);outline-offset:2px}
+  header{background:var(--sidebar);border-bottom:1px solid rgba(255,255,255,.06)}
+  header .logo small{color:#9eada2;opacity:1}
+  header .op{background:#222e25;border:1px solid var(--line);color:#cbd7cd}
+  h2{color:#a9b7ac}
+  select,input,textarea{background:var(--surface2);border:1px solid var(--line);border-radius:10px}
+  select option{background:#18221b;color:var(--ink)}
+  input::placeholder,textarea::placeholder{color:var(--muted)}
+  .seg{background:var(--surface2);border:1px solid var(--line);border-radius:12px}
+  .seg button.on{background:#416c44;box-shadow:inset 0 0 0 1px #568459}
+  .counter{border-radius:18px;border:1px solid rgba(255,255,255,.08);box-shadow:0 12px 34px rgba(0,0,0,.22)}
+  .counter.arv{background:#416c44;border-color:#568459}
+  .counter.cha{background:#8c5533;border-color:#b0764f}
+  .daytot,.card{background:var(--surface);border:1px solid var(--line-soft);border-radius:18px;box-shadow:0 12px 34px rgba(0,0,0,.22)}
+  .card{padding:16px}
+  .btn{background:#416c44;border:1px solid #568459;border-radius:11px;font-weight:800;box-shadow:0 5px 16px rgba(0,0,0,.24)}
+  .btn.ghost{background:var(--surface2);border:1px solid var(--line);color:#cbd7cd;box-shadow:none}
+  th{border-bottom-color:var(--line)}
+  td{border-bottom-color:var(--line-soft)}
+  .pill.arv{background:#203728;color:#acd1a2}
+  .pill.cha{background:#3c271d;color:#eb925d}
+  .totrow{border-bottom-color:var(--line-soft)}
+  .msg{background:var(--surface2);border:1px solid var(--line-soft)}
+  nav{background:var(--sidebar);border-top:1px solid rgba(255,255,255,.07)}
+  nav button{position:relative;color:#aebbb1;font-weight:700;border-radius:11px;margin:4px 2px}
+  nav button.on{color:var(--ink);background:var(--soft)}
+  nav button.on:before{content:"";position:absolute;left:24%;right:24%;top:-4px;height:3px;border-radius:0 0 3px 3px;background:var(--lime)}
+  .modal{background:rgba(3,7,4,.76)}
+  .sheet{background:var(--surface);border:1px solid var(--line-soft);border-bottom:0;border-radius:20px 20px 0 0;box-shadow:0 26px 76px rgba(0,0,0,.48)}
+  .flash{background:var(--surface);color:var(--ink);border:1px solid #3d5b41;box-shadow:0 12px 34px rgba(0,0,0,.4)}
+  *{scrollbar-width:thin;scrollbar-color:#344239 transparent}
 </style>
 </head>
 <body>
