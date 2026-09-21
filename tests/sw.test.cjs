@@ -8,7 +8,7 @@ function worker({failInstall=false,status=200}={}){
   const cache={addAll:async()=>{if(failInstall)throw Error('offline');},match:async()=>offline,put:async()=>{}};
   const context={URL,Request:class {},Response, setTimeout,clearTimeout,
     fetch:async()=>new Response('page',{status}),
-    caches:{open:async()=>cache,keys:async()=>['gefaz-conta-v18','gefaz-conta-v19','another-app'],delete:async k=>deleted.push(k)},
+    caches:{open:async()=>cache,keys:async()=>['gefaz-conta-v19','gefaz-conta-v20','another-app'],delete:async k=>deleted.push(k)},
     self:{location:{origin:'https://example.com'},registration:{scope:'https://example.com/gefaz-conta/'},
       addEventListener:(k,fn)=>handlers[k]=fn,skipWaiting:async()=>{activated=true;},clients:{claim:async()=>{}}}};
   vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../sw.js'),'utf8'),context);
@@ -16,7 +16,7 @@ function worker({failInstall=false,status=200}={}){
 }
 test('activation removes only old caches belonging to this app',async()=>{
   const w=worker();let pending;w.handlers.activate({waitUntil:p=>pending=p});await pending;
-  assert.deepEqual(w.deleted,['gefaz-conta-v18']);
+  assert.deepEqual(w.deleted,['gefaz-conta-v19']);
 });
 test('incomplete installation never activates',async()=>{
   const w=worker({failInstall:true});let pending;w.handlers.install({waitUntil:p=>pending=p});
